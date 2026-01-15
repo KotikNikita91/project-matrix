@@ -5,50 +5,78 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
+  <!-- PapaParse: надёжный CSV-парсер -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <header class="page-header">
+    <div class="title-wrap">
+      <h1>Функциональная матрица</h1>
+      <p class="subtitle">Интерактивный просмотр ролей и ответственности</p>
+    </div>
+  </header>
 
-<header class="page-header">
-  <h1>Функциональная матрица</h1>
-  <p class="subtitle">Интерактивный просмотр ролей и ответственности</p>
-</header>
+  <main>
+    <section class="controls">
+      <div class="filter">
+        <label for="filter-function">Функция</label>
+        <select id="filter-function"></select>
+      </div>
 
-<section class="controls">
-  <select id="filter-function"></select>
-  <select id="filter-department"></select>
-  <select id="filter-division"></select>
-  <select id="filter-position"></select>
-  <select id="filter-role"></select>
-  <button id="clear">Сбросить</button>
-</section>
+      <div class="filter">
+        <label for="filter-department">Департамент</label>
+        <select id="filter-department"></select>
+      </div>
 
-<section class="table-wrapper">
-  <table id="result">
-    <thead>
-      <tr>
-        <th class="resizable">№<div class="resizer"></div></th>
-        <th class="function resizable">Функция<div class="resizer"></div></th>
-        <th class="resizable">Продукт<div class="resizer"></div></th>
-        <th class="resizable">Департамент<div class="resizer"></div></th>
-        <th class="resizable">Отдел<div class="resizer"></div></th>
-        <th class="resizable">Должность<div class="resizer"></div></th>
-        <th class="resizable">Роль<div class="resizer"></div></th>
-        <th>Вход</th>
-        <th>От кого и как</th>
-        <th>Выход</th>
-        <th>Кому</th>
-        <th>Используемое ПО</th>
-        <th>Метрика</th>
-        <th>Как цифруем</th>
-        <th>Комментарий</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</section>
+      <div class="filter">
+        <label for="filter-division">Отдел</label>
+        <select id="filter-division"></select>
+      </div>
 
-<script src="app.js"></script>
+      <div class="filter">
+        <label for="filter-position">Должность</label>
+        <select id="filter-position"></select>
+      </div>
+
+      <div class="filter">
+        <label for="filter-role">Роль</label>
+        <select id="filter-role"></select>
+      </div>
+
+      <div class="filter reset">
+        <button id="clear">Сбросить фильтры</button>
+      </div>
+    </section>
+
+    <section class="table-wrapper" id="table-area">
+      <div id="info" class="info hidden"></div>
+      <table id="result" aria-describedby="info">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th class="function-col">Функция</th>
+            <th>Продукт</th>
+            <th>Департамент</th>
+            <th>Отдел</th>
+            <th>Должность</th>
+            <th>Роль</th>
+            <th>Вход</th>
+            <th>От кого и как</th>
+            <th>Выход</th>
+            <th>Кому</th>
+            <th>Используемое ПО</th>
+            <th>Метрика</th>
+            <th>Как цифруем</th>
+            <th>Комментарий</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>

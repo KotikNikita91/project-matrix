@@ -39,6 +39,12 @@ header h1{ margin:0; font-size:20px }
 /* table base */
 table{ width:100%; border-collapse:collapse; font-size:13px; background:var(--bg) }
 
+td.col-role {
+  vertical-align: middle;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
 /* STICKY HEADER: stick to top of .table-wrapper (top:0) */
 thead th{
   position: sticky;
@@ -64,12 +70,6 @@ th, td{
 
 /* body cells top-align so multi-line content looks neat */
 tbody td{ vertical-align: top; }
-
-td.col-role {
-  vertical-align: middle;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
 
 /* hover */
 tbody tr:hover{ background:#fbf8ff; }

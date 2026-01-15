@@ -3,44 +3,53 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Люди - функциональная матрица</title>
-  <link rel="stylesheet" href="style.css" />
-  <!-- PapaParse для корректного разбора CSV -->
+  <title>Функциональная матрица</title>
+
+  <!-- CSV parser -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>
-    <h1>Люди - функциональная матрица</h1>
-  </header>
 
-  <section class="controls">
-    <label>Функция
-      <select id="filter-function"></select>
-    </label>
-    <label>Департамент
-      <select id="filter-department"></select>
-    </label>
-    <label>Отдел
-      <select id="filter-division"></select>
-    </label>
-    <label>Должность
-      <select id="filter-position"></select>
-    </label>
-    <button id="clear">Сбросить</button>
-  </section>
+<header class="page-header">
+  <h1>Функциональная матрица</h1>
+  <p class="subtitle">Интерактивный просмотр ролей и ответственности</p>
+</header>
 
-  <section>
-    <table id="result">
-      <thead>
-        <tr>
-          <th>№</th><th>Функция</th><th>Продукт</th><th>Департамент</th><th>Отдел</th><th>Должность</th><th>Роль</th>
-          <th>Вход</th><th>От кого и как</th><th>Выход</th><th>Кому</th><th>Используемое ПО</th><th>Метрика</th><th>Как цифруем</th><th>Комментарий</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </section>
+<section class="controls">
+  <select id="filter-function"></select>
+  <select id="filter-department"></select>
+  <select id="filter-division"></select>
+  <select id="filter-position"></select>
+  <button id="clear">Сбросить</button>
+</section>
 
-  <script src="app.js"></script>
+<section class="table-wrapper">
+  <table id="result">
+    <thead>
+      <tr>
+        <th class="resizable">№<div class="resizer"></div></th>
+        <th class="function resizable">Функция<div class="resizer"></div></th>
+        <th class="resizable">Продукт<div class="resizer"></div></th>
+        <th class="resizable">Департамент<div class="resizer"></div></th>
+        <th class="resizable">Отдел<div class="resizer"></div></th>
+        <th class="resizable">Должность<div class="resizer"></div></th>
+        <th class="resizable">Роль<div class="resizer"></div></th>
+        <th>Вход</th>
+        <th>От кого и как</th>
+        <th>Выход</th>
+        <th>Кому</th>
+        <th>Используемое ПО</th>
+        <th>Метрика</th>
+        <th>Как цифруем</th>
+        <th>Комментарий</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<script src="app.js"></script>
 </body>
 </html>

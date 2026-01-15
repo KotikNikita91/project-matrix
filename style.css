@@ -1,9 +1,142 @@
-body { font-family: Arial, Helvetica, sans-serif; padding:20px; color:#222; }
-header h1 { margin:0 0 12px; }
-.controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; align-items:center;}
-.controls label { font-size:14px; }
-.controls select { min-width:160px; padding:4px; margin-left:6px; }
-#result { width:100%; border-collapse:collapse; }
-#result th, #result td { border:1px solid #ddd; padding:6px; font-size:13px; text-align:left; vertical-align:top; }
-#result thead th { background:#f5f5f5; }
-button#clear { padding:6px 10px; }
+:root {
+  --accent: #6b4eff;
+  --accent-soft: #efeaff;
+  --text-main: #2b2b2b;
+  --text-muted: #6f6f6f;
+  --border-light: #e6e6ef;
+  --bg-main: #ffffff;
+  --bg-hover: #f6f4ff;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: Inter, Arial, sans-serif;
+  background: var(--bg-main);
+  color: var(--text-main);
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.controls {
+  margin: 24px 0;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.controls select,
+.controls button {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-light);
+}
+
+.controls select {
+  min-width: 180px;
+}
+
+.controls button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  opacity: 0.9;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+thead th {
+  background: var(--accent-soft);
+  color: var(--text-main);
+  text-align: left;
+  padding: 10px;
+  border-bottom: 2px solid var(--accent);
+  position: relative;
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-light);
+  vertical-align: top;
+}
+
+tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* Ограничение ширины функции */
+td.function,
+th.function {
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Role tooltip */
+.role {
+  font-weight: 600;
+  color: var(--accent);
+  cursor: help;
+  position: relative;
+}
+
+.role::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  bottom: 130%;
+  width: 340px;
+  background: #fff;
+  border: 1px solid var(--border-light);
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+  z-index: 10;
+}
+
+.role:hover::after {
+  opacity: 1;
+}
+
+/* Column resizer */
+th.resizable {
+  position: relative;
+}
+
+.resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}

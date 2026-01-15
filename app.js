@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadCSV();
 
   // 2) set up resize listener to recompute sticky offset
-  window.addEventListener('resize', setTableTopOffset);
+  // window.addEventListener('resize', setTableTopOffset);
 });
 
 /* --------------------
@@ -332,17 +332,6 @@ function renderTable(){
 /* --------------------
    Sticky header offset: compute combined header+controls height and set CSS var
    -------------------- */
-function setTableTopOffset(){
-  const header = document.querySelector('header');
-  const controls = document.querySelector('.controls');
-  let offset = 0;
-  if (header) offset += header.getBoundingClientRect().height;
-  if (controls) offset += controls.getBoundingClientRect().height;
-  // add tiny margin
-  offset += 6;
-  document.documentElement.style.setProperty('--table-top-offset', offset + 'px');
-}
-
 /* --------------------
    Utilities
    -------------------- */

@@ -80,8 +80,7 @@ function loadCSV(){
       hideInfo();
       initFiltersUI(headers);
       renderTable();
-      setTableTopOffset();
-    })
+      })
     .catch(err => {
       console.error('Ошибка загрузки CSV', err);
       showInfo('Ошибка при загрузке данных: ' + err.message, true);

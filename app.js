@@ -24,7 +24,7 @@ function parseCSV(text) {
   const headers = rows[0].split(",").map(h => h.trim());
 
   return rows.slice(1).map(row => {
-    const values = row.split(";");
+    const values = row.split(",");
     const obj = {};
     headers.forEach((h, i) => obj[h] = values[i] || "");
     return obj;

@@ -1,97 +1,83 @@
-// app.js — robust client-side CSV loader and interdependent filters
-const DATA_URL = 'data/matrix.csv'; // убедись, что файл лежит в data/matrix.csv
+const DATA_URL = 'data/matrix.csv';
 
-let rawData = []; // массив объектов
-const filterIds = ['function','department','division','position'];
+const ROLE_INFO = {
+  'О': 'Ответственный: организует и координирует выполнение функции, назначает исполнителей, контролирует сроки и качество, обеспечивает достижение результата.',
+  'В': 'Выполняющий: непосредственно выполняет работу по поручению ответственного.',
+  'У': 'Утверждающий: постановщик задач и финально ответственный за результат.',
+  'К': 'Консультант: дает экспертные рекомендации.',
+  'И': 'Информируемый: получает информацию о ходе или результате.',
+  'П': 'Помощник: содействует выполнению функции ресурсами.',
+  'ПК': 'Помощник-консультант: сочетает экспертную поддержку и помощь ресурсами.'
+};
+
+let data = [];
+const filters = ['function', 'department', 'division', 'position'];
 
 document.addEventListener('DOMContentLoaded', () => {
-  // установить слушатели
-  document.getElementById('clear').addEventListener('click', clearFilters);
-  filterIds.forEach(id => {
-    document.getElementById('filter-' + id).addEventListener('change', onFilterChange);
-  });
-
   loadData();
+  document.getElementById('clear').onclick = resetFilters;
 });
 
 function loadData() {
   fetch(DATA_URL)
-    .then(resp => {
-      if (!resp.ok) throw new Error('Не удалось загрузить CSV: ' + resp.status);
-      return resp.text();
-    })
+    .then(r => r.text())
     .then(text => {
       const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-      if (parsed.errors && parsed.errors.length) {
-        console.warn('PapaParse ошибки:', parsed.errors.slice(0,5));
-      }
-      rawData = parsed.data.map(normalizeRow);
-      initFiltersUI();
+      data = parsed.data.map(normalize);
+      initFilters();
       render();
-    })
-    .catch(err => {
-      console.error(err);
-      alert('Ошибка загрузки данных: ' + err.message + '. Смотри консоль (F12).');
+      initResizers();
     });
 }
 
-function normalizeRow(r) {
-  // Переименуй ключи, если в CSV они иные, но ожидание — именно такие имена:
-  // number,function,product,department,division,position,role,input,from_how,output,to_whom,software,metric,how_to_digitize,comment
-  // Приводим все поля к строкам и trim
-  const keys = ['number','function','product','department','division','position','role',
-                'input','from_how','output','to_whom','software','metric','how_to_digitize','comment'];
-  const out = {};
-  keys.forEach(k => { out[k] = (r[k] || '').toString().trim(); });
-  return out;
+function normalize(r) {
+  return {
+    number: r.number || '',
+    function: r.function || '',
+    product: r.product || '',
+    department: r.department || '',
+    division: r.division || '',
+    position: r.position || '',
+    role: r.role || '',
+    input: r.input || '',
+    from_how: r.from_how || '',
+    output: r.output || '',
+    to_whom: r.to_whom || '',
+    software: r.software || '',
+    metric: r.metric || '',
+    how_to_digitize: r.how_to_digitize || '',
+    comment: r.comment || ''
+  };
 }
 
-function initFiltersUI() {
-  // Заполнить все селекты всеми уникальными значениями на старте
-  updateAllFilterOptions();
-}
-
-function getCurrentFilters() {
-  const f = {};
-  filterIds.forEach(id => {
-    f[id] = document.getElementById('filter-' + id).value || '';
+function initFilters() {
+  filters.forEach(f => {
+    const el = document.getElementById('filter-' + f);
+    el.onchange = render;
   });
+  updateFilters(data);
+}
+
+function getActiveFilters() {
+  const f = {};
+  filters.forEach(k => f[k] = document.getElementById('filter-' + k).value);
   return f;
 }
 
-function onFilterChange() {
-  // при каждом изменении фильтра — обновляем опции в селектах с учётом текущего состояния (каскад)
-  updateAllFilterOptions();
-  render();
-}
-
-function clearFilters() {
-  filterIds.forEach(id => { document.getElementById('filter-'+id).value = ''; });
-  updateAllFilterOptions();
-  render();
-}
-
-function updateAllFilterOptions() {
-  // Для каждой опции показываем значения, доступные при фиксированных остальных фильтрах
-  const current = getCurrentFilters();
-  filterIds.forEach(id => {
-    // создаём фильтр, исключая текущий id (чтобы он показывал варианты, совместимые с остальными)
-    const otherFilters = Object.entries(current).filter(([k]) => k !== id);
-    const subset = rawData.filter(row => {
-      return otherFilters.every(([k,v]) => !v || row[k] === v);
-    });
-    const values = Array.from(new Set(subset.map(r => r[id]).filter(Boolean))).sort();
-    const sel = document.getElementById('filter-' + id);
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">Все</option>' + values.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-    // если прежнее значение всё ещё доступно — оставляем, иначе сбрасываем
-    if (prev && values.includes(prev)) sel.value = prev; else sel.value = '';
+function updateFilters(source) {
+  const active = getActiveFilters();
+  filters.forEach(k => {
+    const sel = document.getElementById('filter-' + k);
+    const values = [...new Set(source.map(r => r[k]).filter(Boolean))];
+    sel.innerHTML = '<option value="">Все</option>' +
+      values.map(v => `<option value="${v}">${v}</option>`).join('');
+    if (values.includes(active[k])) sel.value = active[k];
   });
 }
 
-function filterData() {
-  const f = getCurrentFilters();
-  return rawData.filter(r =>
+function filteredData() {
+  const f = getActiveFilters();
+  return data.filter(r =>
     (!f.function || r.function === f.function) &&
     (!f.department || r.department === f.department) &&
     (!f.division || r.division === f.division) &&
@@ -100,32 +86,56 @@ function filterData() {
 }
 
 function render() {
-  const body = document.querySelector('#result tbody');
-  const rows = filterData();
+  const rows = filteredData();
+  updateFilters(rows);
+  const tbody = document.querySelector('#result tbody');
+
   if (!rows.length) {
-    body.innerHTML = '<tr><td colspan="15">Нет данных по выбранным фильтрам</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15">Нет данных</td></tr>';
     return;
   }
-  body.innerHTML = rows.map(r => `
+
+  tbody.innerHTML = rows.map(r => `
     <tr>
-      <td>${escapeHtml(r.number)}</td>
-      <td>${escapeHtml(r.function)}</td>
-      <td>${escapeHtml(r.product)}</td>
-      <td>${escapeHtml(r.department)}</td>
-      <td>${escapeHtml(r.division)}</td>
-      <td>${escapeHtml(r.position)}</td>
-      <td>${escapeHtml(r.role)}</td>
-      <td>${escapeHtml(r.input)}</td>
-      <td>${escapeHtml(r.from_how)}</td>
-      <td>${escapeHtml(r.output)}</td>
-      <td>${escapeHtml(r.to_whom)}</td>
-      <td>${escapeHtml(r.software)}</td>
-      <td>${escapeHtml(r.metric)}</td>
-      <td>${escapeHtml(r.how_to_digitize)}</td>
-      <td>${escapeHtml(r.comment)}</td>
+      <td>${r.number}</td>
+      <td class="function" title="${r.function}">${r.function}</td>
+      <td>${r.product}</td>
+      <td>${r.department}</td>
+      <td>${r.division}</td>
+      <td>${r.position}</td>
+      <td class="role" data-tooltip="${ROLE_INFO[r.role] || ''}">${r.role}</td>
+      <td>${r.input}</td>
+      <td>${r.from_how}</td>
+      <td>${r.output}</td>
+      <td>${r.to_whom}</td>
+      <td>${r.software}</td>
+      <td>${r.metric}</td>
+      <td>${r.how_to_digitize}</td>
+      <td>${r.comment}</td>
     </tr>
   `).join('');
 }
 
-// небольшая защита от XSS при вставке в DOM
-function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function resetFilters() {
+  filters.forEach(f => document.getElementById('filter-' + f).value = '');
+  render();
+}
+
+/* Column resize */
+function initResizers() {
+  document.querySelectorAll('.resizer').forEach(resizer => {
+    let startX, startWidth, th;
+    resizer.addEventListener('mousedown', e => {
+      th = e.target.parentElement;
+      startX = e.pageX;
+      startWidth = th.offsetWidth;
+      document.onmousemove = e => {
+        th.style.width = startWidth + (e.pageX - startX) + 'px';
+      };
+      document.onmouseup = () => {
+        document.onmousemove = null;
+        document.onmouseup = null;
+      };
+    });
+  });
+}

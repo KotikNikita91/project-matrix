@@ -1,13 +1,13 @@
-/* app.js
-   Robust client-side CSV loader + cascading filters + role tooltip
-   Expected CSV headers (any language but matching by keywords):
-   number, function, product, department, division, position, role,
-   input, from_how, output, to_whom, software, metric, how_to_digitize, comment
+/* app.js — улучшённая версия
+   - PapaParse парсит CSV
+   - каскадные фильтры
+   - ячейки теперь переносятся (wrap)
+   - динамический DOM-tooltip вместо ::after (более надёжно)
 */
 
-const DATA_URL = 'data/matrix.csv'; // put matrix.csv into data/ folder
+const DATA_URL = 'data/matrix.csv';
 
-// role descriptions (tooltip)
+// role descriptions
 const ROLE_INFO = {
   'О': 'Ответственный: отвечает за организацию и координацию выполнения функции. Назначает исполнителей, контролирует сроки и качество, координирует выполнение и регулирует рабочий процесс. Может выполнить работу сам или назначить исполнителей. Обеспечивает достижение результата.',
   'В': 'Выполняющий: непосредственно выполняет работу по поручению ответственного: готовит документы, проводит расчеты, взаимодействует с системами, формирует отчеты и т.д.',
@@ -18,10 +18,9 @@ const ROLE_INFO = {
   'ПК': 'Помощник-консультант: обеспечивает экспертную поддержку и ресурсы, отвечает за качество выполнения.'
 };
 
-let rawRows = []; // array of normalized row objects
-
-// which filters to render and cascade
-const FILTER_KEYS = ['function', 'department', 'division', 'position', 'role'];
+let rawRows = [];
+const FILTER_KEYS = ['function','department','division','position','role'];
+let tooltipEl = null; // element used for dynamic tooltip
 
 document.addEventListener('DOMContentLoaded', () => {
   setupUI();
@@ -37,16 +36,21 @@ function setupUI(){
     render();
   });
 
-  // handle filter change events
   FILTER_KEYS.forEach(k => {
     const el = document.getElementById('filter-' + k);
     if (el) el.addEventListener('change', onFilterChange);
   });
+
+  // create tooltip element once
+  tooltipEl = document.createElement('div');
+  tooltipEl.className = 'tooltip';
+  tooltipEl.style.opacity = '0';
+  tooltipEl.style.pointerEvents = 'none';
+  document.body.appendChild(tooltipEl);
 }
 
 function onFilterChange(){
-  // when a filter changes we want to update the other selects to show only compatible options
-  updateFilterOptions(); 
+  updateFilterOptions();
   render();
 }
 
@@ -58,12 +62,12 @@ function loadCSV(){
       return r.text();
     })
     .then(text => {
-      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
-      if (parsed.errors && parsed.errors.length){
+      const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+      if (parsed.errors && parsed.errors.length) {
         console.warn('PapaParse errors (first 5):', parsed.errors.slice(0,5));
       }
-      if (!parsed.data || !parsed.data.length){
-        showInfo('Данные не найдены в CSV. Проверьте файл в data/matrix.csv', true);
+      if (!parsed.data || !parsed.data.length) {
+        showInfo('CSV пуст или не распознан. Проверьте файл data/matrix.csv', true);
         return;
       }
       rawRows = parsed.data.map(normalizeRow);
@@ -77,66 +81,42 @@ function loadCSV(){
     });
 }
 
-// try to map arbitrary CSV header names to our internal keys
 function normalizeRow(row){
-  // create a new object with keys we expect
   const out = {
-    number: '',
-    function: '',
-    product: '',
-    department: '',
-    division: '',
-    position: '',
-    role: '',
-    input: '',
-    from_how: '',
-    output: '',
-    to_whom: '',
-    software: '',
-    metric: '',
-    how_to_digitize: '',
-    comment: ''
+    number:'', function:'', product:'', department:'', division:'', position:'', role:'',
+    input:'', from_how:'', output:'', to_whom:'', software:'', metric:'', how_to_digitize:'', comment:''
   };
-  // create normalized headers map from parsed row keys
   Object.keys(row).forEach(k => {
     const v = row[k] == null ? '' : String(row[k]).trim();
-    const kn = normalizeKey(k);
-    // match to closest internal field by contains
+    const kn = String(k || '').toLowerCase().replace(/\s+/g,'_').replace(/[^a-zа-я0-9_]/gi,'');
     if (kn.includes('num') || kn === 'no' || kn === 'number') out.number = v;
     else if (kn.includes('funct') || kn === 'function' || kn.includes('функ')) out['function'] = v;
     else if (kn.includes('product') || kn.includes('проду')) out.product = v;
-    else if (kn.includes('depart') || kn.includes('департ') || kn.includes('department')) out.department = v;
+    else if (kn.includes('depart') || kn.includes('департ')) out.department = v;
     else if (kn.includes('div') || kn.includes('отдел')) out.division = v;
     else if (kn.includes('position') || kn.includes('долж')) out.position = v;
     else if (kn === 'role' || kn.includes('роль')) out.role = v;
     else if (kn.includes('input') || kn.includes('вход')) out.input = v;
-    else if (kn.includes('from') || kn.includes('отк') || kn.includes('от_кого') || kn.includes('how')) out.from_how = v;
+    else if (kn.includes('from') || kn.includes('от_кого') || kn.includes('how')) out.from_how = v;
     else if (kn.includes('output') || kn.includes('выход')) out.output = v;
-    else if (kn.includes('to') || kn.includes('to_whom') || kn.includes('кому')) out.to_whom = v;
+    else if (kn.includes('to') || kn.includes('кому') || kn.includes('to_whom')) out.to_whom = v;
     else if (kn.includes('soft') || kn.includes('прог') || kn.includes('поо')) out.software = v;
     else if (kn.includes('metric') || kn.includes('метрик')) out.metric = v;
     else if (kn.includes('digit') || kn.includes('цыф') || kn.includes('циф')) out.how_to_digitize = v;
     else if (kn.includes('comment') || kn.includes('комме')) out.comment = v;
     else {
-      // fallback: if some internal still empty, try to fill
-      // not strict — we don't override filled fields
-      if (!out.comment) out.comment = (out.comment ? out.comment + ' ' : '') + v;
+      // fallback: append to comment if nothing matched
+      if (!out.comment) out.comment = v; else out.comment += (v ? ' | ' + v : '');
     }
   });
   return out;
 }
 
-function normalizeKey(k){
-  return String(k || '').toLowerCase().replace(/\s+/g,'_').replace(/[^a-zа-я0-9_]/gi,'');
-}
-
-/* UI helpers */
-
-function showInfo(msg, important = false){
+function showInfo(msg, important=false){
   const el = document.getElementById('info');
   el.classList.remove('hidden');
   el.textContent = msg;
-  if (important) el.style.border = `1px solid #ffdede`; else el.style.border = 'none';
+  if (important) el.style.border = '1px solid #ffdede'; else el.style.border = 'none';
 }
 
 function hideInfo(){
@@ -146,35 +126,29 @@ function hideInfo(){
   el.style.border = 'none';
 }
 
-/* Filters initialization and cascading behavior */
-
-// populate filters initially with all possible values
+/* Filters */
 function initializeFiltersFromData(){
   FILTER_KEYS.forEach(k => {
     const sel = document.getElementById('filter-' + k);
     if (!sel) return;
-    // unique values sorted
-    const vals = Array.from(new Set(rawRows.map(r => r[k]).filter(Boolean))).sort((a,b)=> a.localeCompare(b,'ru'));
+    const vals = Array.from(new Set(rawRows.map(r => r[k]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru'));
     sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
   });
-  // attach listeners already done in setupUI
 }
 
-// when updating options, make each select show only values compatible with other active filters
 function updateFilterOptions(){
   const current = getActiveFilters();
   FILTER_KEYS.forEach(k => {
     const sel = document.getElementById('filter-' + k);
     if (!sel) return;
-    // build subset where other filters (excluding this key) are applied
     const subset = rawRows.filter(r => {
-      return FILTER_KEYS.every(otherKey => {
-        if (otherKey === k) return true; // skip current
-        const val = current[otherKey];
-        return !val || r[otherKey] === val;
+      return FILTER_KEYS.every(other => {
+        if (other === k) return true;
+        const val = current[other];
+        return !val || r[other] === val;
       });
     });
-    const values = Array.from(new Set(subset.map(r=>r[k]).filter(Boolean))).sort((a,b)=> a.localeCompare(b,'ru'));
+    const values = Array.from(new Set(subset.map(r=>r[k]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru'));
     const prev = sel.value;
     sel.innerHTML = '<option value="">Все</option>' + values.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
     if (prev && values.includes(prev)) sel.value = prev; else sel.value = '';
@@ -190,31 +164,24 @@ function getActiveFilters(){
   return res;
 }
 
-/* Filtering + rendering */
-
+/* Rendering */
 function filterRows(){
   const f = getActiveFilters();
-  return rawRows.filter(r => {
-    return FILTER_KEYS.every(k => {
-      if (!f[k]) return true;
-      return r[k] === f[k];
-    });
-  });
+  return rawRows.filter(r => FILTER_KEYS.every(k => !f[k] || r[k] === f[k]));
 }
 
 function render(){
-  // update selects to be dependent
   updateFilterOptions();
-
   const rows = filterRows();
   const tbody = document.querySelector('#result tbody');
   if (!rows.length){
     tbody.innerHTML = '<tr><td colspan="15">Нет данных по выбранным фильтрам</td></tr>';
     return;
   }
+
   tbody.innerHTML = rows.map(r => {
-    // tooltip for role (lookup by exact role symbol)
     const roleDesc = (r.role && ROLE_INFO[r.role]) ? ROLE_INFO[r.role] : '';
+    // escape attributes
     return `<tr>
       <td>${escapeHtml(r.number)}</td>
       <td class="function-col" title="${escapeHtmlAttr(r['function'])}">${escapeHtml(r['function'])}</td>
@@ -233,9 +200,80 @@ function render(){
       <td>${escapeHtml(r.comment)}</td>
     </tr>`;
   }).join('');
+
+  // attach listeners for tooltip after rows inserted
+  attachTooltipListeners();
 }
 
-/* Utility: basic HTML escape (for insertion into text nodes) */
+/* Tooltip handling: dynamic element (robust, not clipped) */
+function attachTooltipListeners(){
+  // remove previously attached listeners by cloning nodes (cheap reset)
+  document.querySelectorAll('#result tbody .role').forEach(td => {
+    td.onmouseenter = td.onmousemove = td.onmouseleave = null;
+  });
+
+  document.querySelectorAll('#result tbody .role').forEach(td => {
+    td.addEventListener('mouseenter', e => {
+      const txt = td.getAttribute('data-tooltip') || '';
+      if (!txt) return; // nothing to show
+      showTooltip(txt, td);
+    });
+    td.addEventListener('mousemove', e => {
+      // update position while mouse moves
+      moveTooltip(e, td);
+    });
+    td.addEventListener('mouseleave', () => {
+      hideTooltip();
+    });
+  });
+}
+
+function showTooltip(text, anchorEl){
+  tooltipEl.innerText = text;
+  tooltipEl.style.opacity = '1';
+  tooltipEl.style.display = 'block';
+  // initial position
+  positionTooltipForElement(anchorEl);
+}
+
+function moveTooltip(mouseEvent, anchorEl){
+  // keep tooltip near mouse on large screens: position relative to anchor's bounding rect center
+  positionTooltipForElement(anchorEl);
+}
+
+function hideTooltip(){
+  tooltipEl.style.opacity = '0';
+  tooltipEl.style.display = 'none';
+}
+
+function positionTooltipForElement(el){
+  const rect = el.getBoundingClientRect();
+  const tt = tooltipEl.getBoundingClientRect();
+  const margin = 8;
+
+  // try to position to the right
+  let left = rect.right + margin;
+  let top = rect.top;
+
+  // if overflow right, put left side
+  if (left + tt.width > window.innerWidth - 8) {
+    left = rect.left - tt.width - margin;
+  }
+  // if still out of bounds on left, clamp to window
+  if (left < 8) left = 8;
+
+  // if top overflow bottom, move up
+  if (top + tt.height > window.innerHeight - 8) {
+    top = window.innerHeight - tt.height - 8;
+  }
+  // if top < 8 clamp
+  if (top < 8) top = 8;
+
+  tooltipEl.style.left = left + 'px';
+  tooltipEl.style.top = top + 'px';
+}
+
+/* Utility escaping */
 function escapeHtml(s){
   if (s == null) return '';
   return String(s)
@@ -246,6 +284,5 @@ function escapeHtml(s){
     .replace(/'/g,'&#39;');
 }
 function escapeHtmlAttr(s){
-  // similar but ensure quotes are escaped for attributes
   return escapeHtml(s).replace(/"/g,'&quot;');
 }

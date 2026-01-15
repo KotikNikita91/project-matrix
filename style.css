@@ -108,3 +108,9 @@ tbody tr:hover{ background:#fbf8ff; }
   .role::after{ left:50%; top:120%; transform:translateX(-50%); width:320px }
   .table-wrapper{ max-height: calc(100vh - 260px) }
 }
+
+td.col-role {
+  vertical-align: middle;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}

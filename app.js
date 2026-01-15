@@ -20,14 +20,15 @@ fetch("data.csv")
   });
 
 function parseCSV(text) {
-  const [head, ...lines] = text.split("\n");
-  const keys = head.split(",").map(h => h.trim());
-  return lines
-    .filter(l => l.trim())
-    .map(l => {
-      const values = l.split(",");
-      return Object.fromEntries(keys.map((k, i) => [k, values[i]]));
-    });
+  const rows = text.trim().split(/\r?\n/);
+  const headers = rows[0].split(",").map(h => h.trim());
+
+  return rows.slice(1).map(row => {
+    const values = row.split(";");
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = values[i] || "");
+    return obj;
+  });
 }
 
 function unique(field, filtered = data) {

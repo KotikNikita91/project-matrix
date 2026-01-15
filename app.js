@@ -12,12 +12,17 @@ let data = [];
 
 fetch("data.csv")
   .then(r => r.text())
-  .then(parseCSV)
+  .then(t => {
+    console.log("CSV RAW:", t.slice(0, 500));
+    return parseCSV(t);
+  })
   .then(rows => {
+    console.log("PARSED:", rows.slice(0, 5));
     data = rows;
     initFilters();
     render();
   });
+
 
 function parseCSV(text) {
   const rows = text.trim().split(/\r?\n/);

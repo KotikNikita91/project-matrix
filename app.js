@@ -11,43 +11,23 @@ const ROLE_INFO = {
 };
 
 let data = [];
-const filters = ['function', 'department', 'division', 'position'];
+const filters = ['function', 'department', 'division', 'position', 'role'];
 
-document.addEventListener('DOMContentLoaded', () => {
-  loadData();
-  document.getElementById('clear').onclick = resetFilters;
-});
+document.addEventListener('DOMContentLoaded', loadData);
 
 function loadData() {
   fetch(DATA_URL)
     .then(r => r.text())
     .then(text => {
       const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-      data = parsed.data.map(normalize);
+      data = parsed.data.map(r => ({
+        ...r,
+        role: r.role || ''
+      }));
       initFilters();
       render();
       initResizers();
     });
-}
-
-function normalize(r) {
-  return {
-    number: r.number || '',
-    function: r.function || '',
-    product: r.product || '',
-    department: r.department || '',
-    division: r.division || '',
-    position: r.position || '',
-    role: r.role || '',
-    input: r.input || '',
-    from_how: r.from_how || '',
-    output: r.output || '',
-    to_whom: r.to_whom || '',
-    software: r.software || '',
-    metric: r.metric || '',
-    how_to_digitize: r.how_to_digitize || '',
-    comment: r.comment || ''
-  };
 }
 
 function initFilters() {
@@ -55,49 +35,40 @@ function initFilters() {
     const el = document.getElementById('filter-' + f);
     el.onchange = render;
   });
+  document.getElementById('clear').onclick = () => {
+    filters.forEach(f => document.getElementById('filter-' + f).value = '');
+    render();
+  };
   updateFilters(data);
 }
 
-function getActiveFilters() {
-  const f = {};
-  filters.forEach(k => f[k] = document.getElementById('filter-' + k).value);
-  return f;
-}
-
 function updateFilters(source) {
-  const active = getActiveFilters();
   filters.forEach(k => {
     const sel = document.getElementById('filter-' + k);
     const values = [...new Set(source.map(r => r[k]).filter(Boolean))];
-    sel.innerHTML = '<option value="">Все</option>' +
+    sel.innerHTML =
+      '<option value="">Все</option>' +
       values.map(v => `<option value="${v}">${v}</option>`).join('');
-    if (values.includes(active[k])) sel.value = active[k];
   });
 }
 
 function filteredData() {
-  const f = getActiveFilters();
   return data.filter(r =>
-    (!f.function || r.function === f.function) &&
-    (!f.department || r.department === f.department) &&
-    (!f.division || r.division === f.division) &&
-    (!f.position || r.position === f.position)
+    filters.every(f => {
+      const v = document.getElementById('filter-' + f).value;
+      return !v || r[f] === v;
+    })
   );
 }
 
 function render() {
   const rows = filteredData();
   updateFilters(rows);
+
   const tbody = document.querySelector('#result tbody');
-
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="15">Нет данных</td></tr>';
-    return;
-  }
-
   tbody.innerHTML = rows.map(r => `
     <tr>
-      <td>${r.number}</td>
+      <td>${r.number || ''}</td>
       <td class="function" title="${r.function}">${r.function}</td>
       <td>${r.product}</td>
       <td>${r.department}</td>
@@ -116,22 +87,23 @@ function render() {
   `).join('');
 }
 
-function resetFilters() {
-  filters.forEach(f => document.getElementById('filter-' + f).value = '');
-  render();
-}
-
-/* Column resize */
+/* REAL column resize */
 function initResizers() {
-  document.querySelectorAll('.resizer').forEach(resizer => {
-    let startX, startWidth, th;
+  document.querySelectorAll('th.resizable').forEach((th, index) => {
+    const resizer = th.querySelector('.resizer');
+    let startX, startWidth;
+
     resizer.addEventListener('mousedown', e => {
-      th = e.target.parentElement;
       startX = e.pageX;
       startWidth = th.offsetWidth;
+
       document.onmousemove = e => {
-        th.style.width = startWidth + (e.pageX - startX) + 'px';
+        const width = startWidth + (e.pageX - startX);
+        th.style.width = width + 'px';
+        document.querySelectorAll(`#result tr td:nth-child(${index + 1})`)
+          .forEach(td => td.style.width = width + 'px');
       };
+
       document.onmouseup = () => {
         document.onmousemove = null;
         document.onmouseup = null;
@@ -139,3 +111,4 @@ function initResizers() {
     });
   });
 }
+

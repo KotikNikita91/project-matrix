@@ -65,6 +65,12 @@ th, td{
 /* body cells top-align so multi-line content looks neat */
 tbody td{ vertical-align: top; }
 
+td.col-role {
+  vertical-align: middle;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
 /* hover */
 tbody tr:hover{ background:#fbf8ff; }
 
@@ -109,8 +115,3 @@ tbody tr:hover{ background:#fbf8ff; }
   .table-wrapper{ max-height: calc(100vh - 260px) }
 }
 
-td.col-role {
-  vertical-align: middle;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}

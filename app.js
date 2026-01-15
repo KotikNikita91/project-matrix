@@ -1,105 +1,166 @@
+/* ==========================
+   НАСТРОЙКИ
+========================== */
+
+const DATA_URL = "data.csv";
+
+/* Описания ролей для tooltip */
 const ROLE_INFO = {
-  "О": "Ответственный: организует и координирует выполнение функции.",
-  "В": "Выполняющий: непосредственно выполняет работу.",
-  "У": "Утверждающий: принимает и утверждает результат.",
+  "О": "Ответственный: отвечает за организацию и координацию выполнения функции. Назначает исполнителей, контролирует сроки и качество.",
+  "В": "Выполняющий: непосредственно выполняет работу по заданию ответственного.",
+  "У": "Утверждающий: принимает и утверждает результат, несёт финальную ответственность.",
   "К": "Консультант: даёт экспертную консультацию.",
-  "И": "Информируемый: получает информацию.",
-  "П": "Помощник: содействует выполнению.",
-  "ПК": "Помощник, консультант: объединённая роль."
+  "И": "Информируемый: получает информацию о ходе или результате.",
+  "П": "Помощник: содействует выполнению функции дополнительными ресурсами.",
+  "ПК": "Помощник, консультант: объединённая роль помощника и консультанта."
 };
 
-let data = [];
+let rawRows = [];
+let filteredRows = [];
 
-fetch("data.csv")
-  .then(r => r.text())
-  .then(t => {
-    console.log("CSV RAW:", t.slice(0, 500));
-    return parseCSV(t);
-  })
-  .then(rows => {
-    console.log("PARSED:", rows.slice(0, 5));
-    data = rows;
-    initFilters();
-    render();
-  });
+/* ==========================
+   ЗАГРУЗКА CSV
+========================== */
 
+document.addEventListener("DOMContentLoaded", () => {
+  loadCSV();
+});
 
-function parseCSV(text) {
-  const rows = text.trim().split(/\r?\n/);
-  const headers = rows[0].split(";").map(h => h.trim());
+function loadCSV() {
+  fetch(DATA_URL)
+    .then(resp => {
+      if (!resp.ok) {
+        throw new Error(`CSV не найден (${resp.status})`);
+      }
+      return resp.text();
+    })
+    .then(text => {
+      console.log("CSV RAW (preview):", text.slice(0, 800));
 
-  return rows.slice(1).map(row => {
-    const values = row.split(";");
-    const obj = {};
-    headers.forEach((h, i) => obj[h] = values[i] || "");
-    return obj;
-  });
+      const parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: false
+      });
+
+      if (parsed.errors.length) {
+        console.warn("PapaParse errors:", parsed.errors);
+      }
+
+      rawRows = parsed.data.map(row => normalizeRow(row));
+
+      console.log("PARSED rows sample:", rawRows.slice(0, 3));
+
+      initFilters();
+      render();
+    })
+    .catch(err => {
+      console.error("Ошибка загрузки CSV:", err);
+      alert("Не удалось загрузить данные. Проверь data.csv");
+    });
 }
 
-function unique(field, filtered = data) {
-  return [...new Set(filtered.map(r => r[field]).filter(Boolean))];
+/* ==========================
+   НОРМАЛИЗАЦИЯ
+========================== */
+
+function normalizeRow(row) {
+  const out = {};
+  Object.keys(row).forEach(key => {
+    const cleanKey = String(key)
+      .replace(/^\uFEFF/, "")
+      .trim();
+
+    const val = row[key] == null
+      ? ""
+      : String(row[key]).replace(/\r/g, "").trim();
+
+    out[cleanKey] = val;
+  });
+  return out;
 }
+
+/* ==========================
+   ФИЛЬТРЫ
+========================== */
 
 function initFilters() {
-  fill("filter-function", "Функция");
-  fill("filter-department", "Департамент");
-  fill("filter-division", "Отдел");
-  fill("filter-position", "Должность");
-  fill("filter-role", "Роль");
+  fillFilter("filter-function", "function");
+  fillFilter("filter-department", "department");
+  fillFilter("filter-division", "division");
+  fillFilter("filter-position", "position");
+  fillFilter("filter-role", "role");
 
-  document.querySelectorAll("select").forEach(s =>
-    s.addEventListener("change", render)
-  );
+  document.querySelectorAll(".controls select")
+    .forEach(sel => sel.addEventListener("change", render));
 
-  document.getElementById("clear").onclick = () => {
-    document.querySelectorAll("select").forEach(s => s.value = "");
-    render();
-  };
+  document.getElementById("clear")
+    .addEventListener("click", () => {
+      document.querySelectorAll(".controls select")
+        .forEach(sel => sel.value = "");
+      render();
+    });
 }
 
-function fill(id, field) {
-  const el = document.getElementById(id);
-  el.innerHTML = `<option value="">Все</option>`;
-  unique(field).forEach(v =>
-    el.innerHTML += `<option value="${v}">${v}</option>`
-  );
+function fillFilter(id, field) {
+  const select = document.getElementById(id);
+  select.innerHTML = `<option value="">Все</option>`;
+
+  [...new Set(rawRows.map(r => r[field]).filter(Boolean))]
+    .sort()
+    .forEach(val => {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = val;
+      select.appendChild(opt);
+    });
 }
+
+/* ==========================
+   РЕНДЕР
+========================== */
 
 function render() {
   const f = id => document.getElementById(id).value;
 
-  const filtered = data.filter(r =>
-    (!f("filter-function") || r["Функция"] === f("filter-function")) &&
-    (!f("filter-department") || r["Департамент"] === f("filter-department")) &&
-    (!f("filter-division") || r["Отдел"] === f("filter-division")) &&
-    (!f("filter-position") || r["Должность"] === f("filter-position")) &&
-    (!f("filter-role") || r["Роль"] === f("filter-role"))
+  filteredRows = rawRows.filter(r =>
+    (!f("filter-function")   || r.function   === f("filter-function")) &&
+    (!f("filter-department") || r.department === f("filter-department")) &&
+    (!f("filter-division")   || r.division   === f("filter-division")) &&
+    (!f("filter-position")   || r.position   === f("filter-position")) &&
+    (!f("filter-role")       || r.role       === f("filter-role"))
   );
 
-  const tbody = document.querySelector("tbody");
+  renderTable(filteredRows);
+}
+
+function renderTable(rows) {
+  const tbody = document.querySelector("#matrix tbody");
   tbody.innerHTML = "";
 
-  filtered.forEach(r => {
+  rows.forEach(r => {
     const tr = document.createElement("tr");
+
     tr.innerHTML = `
-      <td class="col-id">${r["№"]}</td>
-      <td class="col-function">${r["Функция"]}</td>
-      <td>${r["Продукт"]}</td>
-      <td>${r["Департамент"]}</td>
-      <td>${r["Отдел"]}</td>
-      <td>${r["Должность"]}</td>
-      <td class="col-role role" data-tooltip="${ROLE_INFO[r["Роль"]] || ""}">
-        ${r["Роль"]}
+      <td class="col-id">${r.number}</td>
+      <td class="col-function">${r.function}</td>
+      <td class="col-text-medium">${r.product}</td>
+      <td>${r.department}</td>
+      <td>${r.division}</td>
+      <td>${r.position}</td>
+      <td class="col-role role" data-tooltip="${ROLE_INFO[r.role] || ""}">
+        ${r.role}
       </td>
-      <td>${r["Вход"]}</td>
-      <td>${r["От кого / как"]}</td>
-      <td>${r["Выход"]}</td>
-      <td>${r["Кому"]}</td>
-      <td>${r["ПО"]}</td>
-      <td>${r["Метрика"]}</td>
-      <td>${r["Как цифруем"]}</td>
-      <td>${r["Комментарий"]}</td>
+      <td class="col-text-medium">${r.input}</td>
+      <td class="col-text-medium">${r.from_how}</td>
+      <td class="col-text-medium">${r.output}</td>
+      <td class="col-text-medium">${r.to_whom}</td>
+      <td class="col-text-medium">${r.software}</td>
+      <td class="col-text-medium">${r.metric}</td>
+      <td class="col-text-medium">${r.how_to_digitize}</td>
+      <td class="col-text-wide">${r.comment}</td>
     `;
+
     tbody.appendChild(tr);
   });
 }

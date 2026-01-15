@@ -1,36 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Functional Matrix</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Project Matrix</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- PapaParse для корректного разбора CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
 </head>
 <body>
+  <header>
+    <h1>Functional matrix — просмотр</h1>
+  </header>
 
-<h1>Функциональная матрица</h1>
+  <section class="controls">
+    <label>Функция
+      <select id="filter-function"></select>
+    </label>
+    <label>Департамент
+      <select id="filter-department"></select>
+    </label>
+    <label>Отдел
+      <select id="filter-division"></select>
+    </label>
+    <label>Должность
+      <select id="filter-position"></select>
+    </label>
+    <button id="clear">Сбросить</button>
+  </section>
 
-<div class="filters">
-  <select id="function"></select>
-  <select id="department"></select>
-  <select id="division"></select>
-  <select id="position"></select>
-</div>
+  <section>
+    <table id="result">
+      <thead>
+        <tr>
+          <th>№</th><th>Функция</th><th>Продукт</th><th>Департамент</th><th>Отдел</th><th>Должность</th><th>Роль</th>
+          <th>Вход</th><th>От кого и как</th><th>Выход</th><th>Кому</th><th>Используемое ПО</th><th>Метрика</th><th>Как цифруем</th><th>Комментарий</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
 
-<table id="result">
-  <thead>
-    <tr>
-      <th>№</th>
-      <th>Функция</th>
-      <th>Продукт</th>
-      <th>Департамент</th>
-      <th>Отдел</th>
-      <th>Должность</th>
-      <th>Роль</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

@@ -1,10 +1,18 @@
-const DATA_URL = 'data.csv';
-const STORAGE_KEY = 'matrix_filters_v1';
+/* app.js — простой, надёжный:
+   - загружает data.csv (PapaParse)
+   - создаёт фильтры (каскадные)
+   - рендерит таблицу (rolewrap + tooltip)
+   - экспорт в Excel (SheetJS)
+   - фильтры сохраняются в localStorage
+   НИКАК не меняет ширины колонок — это делает только style.css (переменные).
+*/
 
+const DATA_URL = 'data.csv';
+const STORAGE_FILTERS = 'matrix_filters_v1';
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции. Назначает исполнителей, контролирует сроки и качество.',
   'В': 'Выполняющий: непосредственно выполняет работу по поручению ответственного.',
-  'У': 'Утверждающий: принимает и утверждает результат, несёт финальную ответственность.',
+  'У': 'Утверждающий: принимает и утверждает результат.',
   'К': 'Консультант: даёт экспертные рекомендации.',
   'И': 'Информируемый: получает информацию о ходе или результате.',
   'П': 'Помощник: содействует выполнению функции ресурсами.',
@@ -12,31 +20,28 @@ const ROLE_INFO = {
 };
 
 let rawRows = [];
-let lastRenderedRows = []; 
-
+let lastRenderedRows = [];
 const FILTER_IDS = ['filter-function','filter-department','filter-division','filter-position','filter-role'];
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCSV();
-  const exportBtn = document.getElementById('export');
-  if (exportBtn) exportBtn.addEventListener('click', onExportClick);
+  document.getElementById('clear').addEventListener('click', onClearClick);
+  document.getElementById('export').addEventListener('click', onExportClick);
 });
 
+/* Load CSV with PapaParse */
 function loadCSV(){
+  showInfo('Загрузка данных...');
   fetch(DATA_URL)
-    .then(resp => {
-      if (!resp.ok) throw new Error('CSV not found: ' + resp.status);
-      return resp.text();
-    })
+    .then(r => { if (!r.ok) throw new Error('CSV не найден: ' + r.status); return r.text(); })
     .then(text => {
-      console.log('CSV preview:', text.slice(0,800));
       const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
       if (parsed.errors && parsed.errors.length) console.warn('PapaParse errors:', parsed.errors.slice(0,10));
       rawRows = parsed.data.map(r => normalizeRow(r));
       initFilters();
       restoreFiltersFromStorage();
       renderTable();
-      showToast('Данные загружены', 1500);
+      showToast('Данные загружены', 900);
     })
     .catch(err => {
       console.error('Load CSV error:', err);
@@ -54,9 +59,10 @@ function normalizeRow(row){
   return out;
 }
 
+/* Filters */
 function initFilters(){
   const headers = rawRows.length ? Object.keys(rawRows[0]) : [];
-  fillSelect('filter-function', headers, ['function','функция','Функция','Function','name','Наименование','Наим']);
+  fillSelect('filter-function', headers, ['function','функция','Функция','Function','name','Наименование']);
   fillSelect('filter-department', headers, ['department','департамент','Департамент','dept']);
   fillSelect('filter-division', headers, ['division','отдел','Отдел']);
   fillSelect('filter-position', headers, ['position','должность','Должность']);
@@ -64,47 +70,36 @@ function initFilters(){
 
   FILTER_IDS.forEach(id => {
     const el = document.getElementById(id);
-    if (!el) return;
-    el.removeEventListener('change', onFilterChange);
-    el.addEventListener('change', onFilterChange);
+    if (el) {
+      el.removeEventListener('change', onFilterChange);
+      el.addEventListener('change', onFilterChange);
+    }
   });
-
-  const clearBtn = document.getElementById('clear');
-  if (clearBtn) {
-    clearBtn.removeEventListener('click', onClearClick);
-    clearBtn.addEventListener('click', onClearClick);
-  }
 }
 
-function findHeaderByCandidates(headers, candidates){
-  const lowered = headers.map(h => h.toLowerCase().replace(/\s+/g,''));
-  for (let cand of candidates){
-    const key = cand.toLowerCase().replace(/\s+/g,'');
-    const idx = lowered.indexOf(key);
+function fillSelect(id, headers, candidates){
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  let header = findHeader(headers, candidates);
+  if (!header) header = headers[0] || '';
+  sel.dataset.csvHeader = header;
+  const vals = header ? Array.from(new Set(rawRows.map(r => r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
+  sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
+}
+
+function findHeader(headers, candidates){
+  const low = headers.map(h => h.toLowerCase().replace(/\s+/g,''));
+  for (let c of candidates){
+    const cc = c.toLowerCase().replace(/\s+/g,'');
+    const idx = low.indexOf(cc);
     if (idx !== -1) return headers[idx];
   }
-  return null;
-}
-
-function fillSelect(selectId, headers, candidates){
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  let header = findHeaderByCandidates(headers, candidates);
-  if (!header){
-    for (let cand of candidates){
-      for (let h of headers){
-        if (h.toLowerCase().includes(cand.toLowerCase().replace(/\s+/g,''))){
-          header = h; break;
-        }
-      }
-      if (header) break;
+  for (let c of candidates){
+    for (let h of headers){
+      if (h.toLowerCase().includes(c.toLowerCase().replace(/\s+/g,''))) return h;
     }
   }
-  if (!header) header = headers[0] || null;
-  sel.dataset.csvHeader = header || '';
-
-  const vals = header ? Array.from(new Set(rawRows.map(r=>r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
-  sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
+  return null;
 }
 
 function onFilterChange(){
@@ -146,9 +141,9 @@ function onClearClick(){
     s.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
     s.value = '';
   });
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(STORAGE_FILTERS);
   renderTable();
-  showToast('Фильтры сброшены', 1200);
+  showToast('Фильтры сброшены', 1000);
 }
 
 function saveFiltersToStorage(){
@@ -157,43 +152,40 @@ function saveFiltersToStorage(){
     const s = document.getElementById(id);
     if (s) obj[id] = s.value || '';
   });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+  localStorage.setItem(STORAGE_FILTERS, JSON.stringify(obj));
 }
 
 function restoreFiltersFromStorage(){
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = localStorage.getItem(STORAGE_FILTERS);
   if (!raw) return;
   try {
     const obj = JSON.parse(raw);
-    let applied = false;
     FILTER_IDS.forEach(id => {
       const s = document.getElementById(id);
       if (s && obj[id] !== undefined){
-        const optExists = Array.from(s.options).some(o => o.value === obj[id]);
-        if (obj[id] === '' || optExists) { s.value = obj[id]; applied = true; }
+        const exists = Array.from(s.options).some(o => o.value === obj[id]);
+        if (obj[id] === '' || exists) s.value = obj[id];
       }
     });
-    if (applied) cascadeFilters();
-  } catch(e){
-    console.warn('restore filters parse error', e);
-  }
+    cascadeFilters();
+  } catch(e){ console.warn('restore filters parse error', e); }
 }
 
+/* Render table rows */
 function renderTable(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
-
   const active = {};
   FILTER_IDS.forEach(id => {
-    const sel = document.getElementById(id);
-    if (sel && sel.dataset.csvHeader) active[sel.dataset.csvHeader] = sel.value;
+    const s = document.getElementById(id);
+    if (s && s.dataset.csvHeader) active[s.dataset.csvHeader] = s.value;
   });
 
   const rows = rawRows.filter(row => {
     return Object.entries(active).every(([hdr,val]) => !val || row[hdr] === val);
   });
 
-  lastRenderedRows = rows; 
+  lastRenderedRows = rows;
 
   if (!rows.length){
     tbody.innerHTML = `<tr><td colspan="15" style="padding:18px 12px; color:#666">Нет данных по выбранным фильтрам</td></tr>`;
@@ -223,17 +215,16 @@ function renderTable(){
     const comment = getValue(['Комментарий','comment']);
 
     const roleDesc = ROLE_INFO[roleKey] || '';
-
     return `<tr>
       <td class="col-id">${escapeHtml(num)}</td>
       <td class="col-function">${escapeHtml(func)}</td>
       <td class="col-text-medium">${escapeHtml(product)}</td>
-      <td>${escapeHtml(department)}</td>
-      <td>${escapeHtml(division)}</td>
-      <td>${escapeHtml(position)}</td>
+      <td class="col-department">${escapeHtml(department)}</td>
+      <td class="col-division">${escapeHtml(division)}</td>
+      <td class="col-position">${escapeHtml(position)}</td>
       <td class="col-role"><div class="rolewrap"><span class="role" data-tooltip="${escapeHtmlAttr(roleDesc)}">${escapeHtml(roleKey)}</span></div></td>
       <td class="col-text-medium">${escapeHtml(input)}</td>
-      <td class="col-text-medium">${escapeHtml(from_how)}</td>
+      <td class="col-fromhow col-text-medium">${escapeHtml(from_how)}</td>
       <td class="col-text-medium">${escapeHtml(output)}</td>
       <td class="col-text-medium">${escapeHtml(to_whom)}</td>
       <td class="col-text-medium">${escapeHtml(software)}</td>
@@ -244,21 +235,17 @@ function renderTable(){
   }).join('');
 }
 
+/* Export to Excel (SheetJS) */
 function onExportClick(){
   if (!lastRenderedRows || !lastRenderedRows.length){
     showToast('Нет данных для экспорта', 1500);
     return;
   }
 
-  // Заголовки — порядок колонок в итоговом Excel
   const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль","Вход","От кого / как","Выход","Кому","Используемое ПО","Метрика","Как цифруем","Комментарий"];
 
-  // Подготовка данных (мэппинг полей из lastRenderedRows)
   const sheetData = lastRenderedRows.map(row => {
-    const get = (candidates) => {
-      for (let k of candidates) if (row[k] !== undefined) return row[k];
-      return '';
-    };
+    const get = (candidates) => { for (let k of candidates) if (row[k] !== undefined) return row[k]; return ''; };
     return {
       "№": get(['№','number','No','no','id']),
       "Функция": get(['Функция','function','Function','name']),
@@ -278,53 +265,27 @@ function onExportClick(){
     };
   });
 
-  // Создаём лист (включая заголовки)
   const ws = XLSX.utils.json_to_sheet(sheetData, { header: headers, skipHeader: false });
-
-  // Задаём ширины колонок (примерные, в символах)
   ws['!cols'] = [
-    { wch: 6 },   // №
-    { wch: 50 },  // Функция
-    { wch: 30 },  // Продукт
-    { wch: 18 },  // Департамент
-    { wch: 18 },  // Отдел
-    { wch: 22 },  // Должность
-    { wch: 10 },  // Роль
-    { wch: 28 },  // Вход
-    { wch: 28 },  // От кого / как
-    { wch: 28 },  // Выход
-    { wch: 20 },  // Кому
-    { wch: 20 },  // ПО
-    { wch: 16 },  // Метрика
-    { wch: 20 },  // Как цифруем
-    { wch: 60 }   // Комментарий
+    {wch:6},{wch:50},{wch:30},{wch:18},{wch:18},{wch:22},{wch:10},{wch:28},{wch:28},{wch:28},{wch:20},{wch:20},{wch:16},{wch:20},{wch:60}
   ];
 
-  // Определим диапазон листа
   const range = XLSX.utils.decode_range(ws['!ref']);
-
-  // Стиль границ (тонкая с серым цветом)
   const thinBorder = { style: "thin", color: { rgb: "FFBFBFBF" } };
   const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
-
-  // Применяем стили к каждой ячейке: перенос текста + границы.
-  for (let R = range.s.r; R <= range.e.r; ++R) {
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-      const cell = ws[cellAddress];
+  for (let R = range.s.r; R <= range.e.r; ++R){
+    for (let C = range.s.c; C <= range.e.c; ++C){
+      const addr = XLSX.utils.encode_cell({r:R,c:C});
+      const cell = ws[addr];
       if (!cell) continue;
-      // Инициализируем стиль-объект, если его нет
       cell.s = cell.s || {};
-      // Wrap текст, выравнивание по верху (в теле) — но у шапки потом переопределим
       cell.s.alignment = Object.assign({}, cell.s.alignment, { wrapText: true, vertical: "top", horizontal: "left" });
-      // Границы
       cell.s.border = allBorders;
     }
   }
-
-  const headerRow = range.s.r; // обычно 0
-  for (let C = range.s.c; C <= range.e.c; ++C) {
-    const addr = XLSX.utils.encode_cell({ r: headerRow, c: C });
+  const headerRow = range.s.r;
+  for (let C = range.s.c; C <= range.e.c; ++C){
+    const addr = XLSX.utils.encode_cell({r: headerRow, c: C});
     if (!ws[addr]) continue;
     ws[addr].s = ws[addr].s || {};
     ws[addr].s.font = Object.assign({}, ws[addr].s.font, { bold: true });
@@ -333,7 +294,6 @@ function onExportClick(){
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Matrix');
-  // Freeze first row
   wb.Workbook = wb.Workbook || {};
   wb.Workbook.Views = wb.Workbook.Views || [];
   wb.Workbook.Views[0] = Object.assign(wb.Workbook.Views[0] || {}, { xSplit: 0, ySplit: 1, topLeftCell: "A2", activeTab: 0 });
@@ -341,26 +301,11 @@ function onExportClick(){
   const now = new Date();
   const ts = now.toISOString().replace(/[:\-]/g,'').split('.')[0];
   const filename = `functional-matrix-${ts}.xlsx`;
-  // Опция bookType/BookSST не нужна, writeFile сам определит
   XLSX.writeFile(wb, filename);
-
-  showToast('Экспорт завершён: ' + filename, 1800);
+  showToast('Экспорт завершён: ' + filename, 1500);
 }
 
-function showToast(text, ms = 1500){
-  const t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = text;
-  t.classList.remove('hidden');
-  t.classList.remove('toast-hidden');
-  t.style.opacity = '1';
-  clearTimeout(t._hideTimer);
-  t._hideTimer = setTimeout(()=> {
-    t.style.opacity = '0';
-    t.classList.add('hidden');
-  }, ms);
-}
-
+/* small UI helpers */
 function showInfo(msg, important=false){
   const el = document.getElementById('info');
   if (!el) return;
@@ -368,9 +313,13 @@ function showInfo(msg, important=false){
   el.textContent = msg;
   el.style.border = important ? '1px solid #ffdede' : 'none';
 }
-
-function escapeHtml(s){
-  if (s == null) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+function showToast(msg, ms=1400){
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  clearTimeout(t._to);
+  t._to = setTimeout(()=> t.classList.add('hidden'), ms);
 }
+function escapeHtml(s){ if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function escapeHtmlAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }

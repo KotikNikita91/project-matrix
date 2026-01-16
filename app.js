@@ -41,13 +41,19 @@ function loadCSV(){
       initFilters();
       restoreFiltersFromStorage();
       renderTable();
+
+      // Спрячем строку "Загрузка данных..." — данные успешно отрисованы
+      hideInfo();
+
       showToast('Данные загружены', 900);
     })
     .catch(err => {
       console.error('Load CSV error:', err);
+      // Оставляем сообщение об ошибке видимым — пользователь должен его увидеть
       showInfo('Ошибка при загрузке данных: ' + err.message, true);
     });
 }
+
 
 function normalizeRow(row){
   const out = {};
@@ -313,6 +319,15 @@ function showInfo(msg, important=false){
   el.textContent = msg;
   el.style.border = important ? '1px solid #ffdede' : 'none';
 }
+
+function hideInfo(){
+  const el = document.getElementById('info');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.textContent = '';
+  el.style.border = 'none';
+}
+
 function showToast(msg, ms=1400){
   const t = document.getElementById('toast');
   if (!t) return;

@@ -5,56 +5,56 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
-  <!-- PapaParse для CSV -->
+  <!-- PapaParse + SheetJS (для экспорта) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <!-- SheetJS (XLSX) для экспорта в .xlsx -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header>
-    <div class="header-inner">
-      <!-- картинка 900x900: помести файл assets/header-image.png в репо -->
-      <img src="header-image.png" alt="Logo" class="header-image" width="90" height="90" />
-      <div class="title-block">
+  <header class="compact-header">
+    <div class="header-left">
+      <img src="assets/header-image.png" alt="Logo" class="header-image" />
+      <div class="title-compact">
         <h1>Функциональная матрица</h1>
-        <p class="subtitle">Интерактивный просмотр ролей и ответственности</p>
+        <p class="subtitle-compact">Интерактивный просмотр ролей</p>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="controls-compact">
+        <div class="filter-compact">
+          <label for="filter-function">Функция</label>
+          <select id="filter-function"></select>
+        </div>
+
+        <div class="filter-compact">
+          <label for="filter-department">Департамент</label>
+          <select id="filter-department"></select>
+        </div>
+
+        <div class="filter-compact">
+          <label for="filter-division">Отдел</label>
+          <select id="filter-division"></select>
+        </div>
+
+        <div class="filter-compact">
+          <label for="filter-position">Должность</label>
+          <select id="filter-position"></select>
+        </div>
+
+        <div class="filter-compact">
+          <label for="filter-role">Роль</label>
+          <select id="filter-role"></select>
+        </div>
+      </div>
+
+      <div class="actions-compact">
+        <button id="clear" class="btn-light">Сбросить</button>
+        <button id="export" class="btn-primary">Экспорт</button>
       </div>
     </div>
   </header>
-
-  <section class="controls" id="controls">
-    <div class="filter">
-      <label for="filter-function">Функция</label>
-      <select id="filter-function"></select>
-    </div>
-
-    <div class="filter">
-      <label for="filter-department">Департамент</label>
-      <select id="filter-department"></select>
-    </div>
-
-    <div class="filter">
-      <label for="filter-division">Отдел</label>
-      <select id="filter-division"></select>
-    </div>
-
-    <div class="filter">
-      <label for="filter-position">Должность</label>
-      <select id="filter-position"></select>
-    </div>
-
-    <div class="filter">
-      <label for="filter-role">Роль</label>
-      <select id="filter-role"></select>
-    </div>
-
-    <div class="filter actions">
-      <button id="clear">Сбросить</button>
-      <button id="export">Экспорт в Excel</button>
-    </div>
-  </section>
 
   <main class="main-area">
     <div id="info" class="info hidden"></div>
@@ -86,7 +86,7 @@
   </main>
 
   <!-- toast -->
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>

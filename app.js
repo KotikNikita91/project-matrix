@@ -250,8 +250,10 @@ function onExportClick(){
     return;
   }
 
+  // Заголовки — порядок колонок в итоговом Excel
   const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль","Вход","От кого / как","Выход","Кому","Используемое ПО","Метрика","Как цифруем","Комментарий"];
 
+  // Подготовка данных (мэппинг полей из lastRenderedRows)
   const sheetData = lastRenderedRows.map(row => {
     const get = (candidates) => {
       for (let k of candidates) if (row[k] !== undefined) return row[k];
@@ -276,16 +278,70 @@ function onExportClick(){
     };
   });
 
-  const ws = XLSX.utils.json_to_sheet(sheetData, { header: headers });
-  const colWidths = headers.map(h => ({ wch: Math.max(10, Math.min(40, h.length + 8)) }));
-  ws['!cols'] = colWidths;
+  // Создаём лист (включая заголовки)
+  const ws = XLSX.utils.json_to_sheet(sheetData, { header: headers, skipHeader: false });
+
+  // Задаём ширины колонок (примерные, в символах)
+  ws['!cols'] = [
+    { wch: 6 },   // №
+    { wch: 50 },  // Функция
+    { wch: 30 },  // Продукт
+    { wch: 18 },  // Департамент
+    { wch: 18 },  // Отдел
+    { wch: 22 },  // Должность
+    { wch: 10 },  // Роль
+    { wch: 28 },  // Вход
+    { wch: 28 },  // От кого / как
+    { wch: 28 },  // Выход
+    { wch: 20 },  // Кому
+    { wch: 20 },  // ПО
+    { wch: 16 },  // Метрика
+    { wch: 20 },  // Как цифруем
+    { wch: 60 }   // Комментарий
+  ];
+
+  // Определим диапазон листа
+  const range = XLSX.utils.decode_range(ws['!ref']);
+
+  // Стиль границ (тонкая с серым цветом)
+  const thinBorder = { style: "thin", color: { rgb: "FFBFBFBF" } };
+  const allBorders = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
+
+  // Применяем стили к каждой ячейке: перенос текста + границы.
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = ws[cellAddress];
+      if (!cell) continue;
+      // Инициализируем стиль-объект, если его нет
+      cell.s = cell.s || {};
+      // Wrap текст, выравнивание по верху (в теле) — но у шапки потом переопределим
+      cell.s.alignment = Object.assign({}, cell.s.alignment, { wrapText: true, vertical: "top", horizontal: "left" });
+      // Границы
+      cell.s.border = allBorders;
+    }
+  }
+
+  const headerRow = range.s.r; // обычно 0
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    const addr = XLSX.utils.encode_cell({ r: headerRow, c: C });
+    if (!ws[addr]) continue;
+    ws[addr].s = ws[addr].s || {};
+    ws[addr].s.font = Object.assign({}, ws[addr].s.font, { bold: true });
+    ws[addr].s.alignment = Object.assign({}, ws[addr].s.alignment, { wrapText: true, vertical: "center", horizontal: "center" });
+  }
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Matrix');
+  // Freeze first row
+  wb.Workbook = wb.Workbook || {};
+  wb.Workbook.Views = wb.Workbook.Views || [];
+  wb.Workbook.Views[0] = Object.assign(wb.Workbook.Views[0] || {}, { xSplit: 0, ySplit: 1, topLeftCell: "A2", activeTab: 0 });
 
   const now = new Date();
   const ts = now.toISOString().replace(/[:\-]/g,'').split('.')[0];
   const filename = `functional-matrix-${ts}.xlsx`;
+  // Опция bookType/BookSST не нужна, writeFile сам определит
   XLSX.writeFile(wb, filename);
 
   showToast('Экспорт завершён: ' + filename, 1800);

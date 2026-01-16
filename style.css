@@ -55,7 +55,7 @@ button{ font-family:inherit; }
 .table-wrapper{ max-height: calc(100vh - 180px); overflow:auto; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 
 /* table: fixed layout so <col> widths apply predictably */
-table{ width:100%; border-collapse:collapse; background:#fff; font-size:13px; table-layout: fixed; }
+table{ width:150%; border-collapse:collapse; background:#fff; font-size:13px; table-layout: fixed; }
 thead th{ position:sticky; top:0; z-index:10; background:var(--purple-soft); border-bottom:2px solid var(--border); padding:10px 12px; text-align:left; font-weight:600; white-space:nowrap; vertical-align:middle; }
 th, td{ padding:10px 12px; white-space:normal; word-break:normal; overflow-wrap:break-word; border-bottom:1px solid var(--border); }
 tbody td{ vertical-align:top }

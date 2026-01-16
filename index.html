@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
-  <!-- PapaParse + SheetJS (для экспорта) -->
+  <!-- PapaParse (CSV parser) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- SheetJS (XLSX) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
   <link rel="stylesheet" href="style.css" />
@@ -61,20 +62,39 @@
 
     <div class="table-wrapper" id="table-wrapper">
       <table id="matrix" aria-describedby="info">
+        <!-- Статический colgroup. Ширины задаёт CSS через переменные в style.css -->
+        <colgroup>
+          <col class="c1" />
+          <col class="c2" />
+          <col class="c3" />
+          <col class="c4" />
+          <col class="c5" />
+          <col class="c6" />
+          <col class="c7" />
+          <col class="c8" />
+          <col class="c9" />
+          <col class="c10" />
+          <col class="c11" />
+          <col class="c12" />
+          <col class="c13" />
+          <col class="c14" />
+          <col class="c15" />
+        </colgroup>
+
         <thead>
           <tr>
             <th class="col-id">№</th>
             <th class="col-function">Функция</th>
             <th class="col-text-medium">Продукт</th>
-            <th>Департамент</th>
-            <th>Отдел</th>
-            <th>Должность</th>
+            <th class="col-department">Департамент</th>
+            <th class="col-division">Отдел</th>
+            <th class="col-position">Должность</th>
             <th class="col-role">Роль</th>
             <th class="col-text-medium">Вход</th>
-            <th class="col-text-medium">От кого / как</th>
+            <th class="col-fromhow">От кого / как</th>
             <th class="col-text-medium">Выход</th>
             <th class="col-text-medium">Кому</th>
-            <th class="col-text-wide">Используемое ПО</th>
+            <th class="col-text-medium">Используемое ПО</th>
             <th class="col-text-medium">Метрика</th>
             <th class="col-text-medium">Как цифруем</th>
             <th class="col-text-wide">Комментарий</th>

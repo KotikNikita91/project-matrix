@@ -11,20 +11,20 @@
      Меняешь значения — сохраняешь и пушишь в репо (только ты).
   */
   --w-c1: 2%;    /* № */
-  --w-c2: 18%;   /* Функция */
+  --w-c2: 13%;   /* Функция */
   --w-c3: 9%;    /* Продукт */
   --w-c4: 9%;    /* Департамент */
   --w-c5: 9%;    /* Отдел */
   --w-c6: 9%;    /* Должность */
   --w-c7: 5%;    /* Роль */
-  --w-c8: 9%;    /* Вход */
-  --w-c9: 6%;    /* От кого / как */
-  --w-c10: 9%;   /* Выход */
-  --w-c11: 9%;   /* Кому */
+  --w-c8: 13%;    /* Вход */
+  --w-c9: 13%;    /* От кого / как */
+  --w-c10: 13%;   /* Выход */
+  --w-c11: 10%;   /* Кому */
   --w-c12: 5%;   /* ПО */
-  --w-c13: 4%;   /* Метрика */
-  --w-c14: 3%;   /* Как цифруем */
-  --w-c15: 5%;   /* Комментарий (можешь увеличить) */
+  --w-c13: 13%;   /* Метрика */
+  --w-c14: 10%;   /* Как цифруем */
+  --w-c15: 10%;   /* Комментарий (можешь увеличить) */
   /* ========================================== */
 }
 
@@ -55,7 +55,7 @@ button{ font-family:inherit; }
 .table-wrapper{ max-height: calc(100vh - 180px); overflow:auto; background:var(--bg); border:1px solid var(--border); border-radius:8px; }
 
 /* table: fixed layout so <col> widths apply predictably */
-table{ width:150%; border-collapse:collapse; background:#fff; font-size:13px; table-layout: fixed; }
+table{ width:143%; border-collapse:collapse; background:#fff; font-size:13px; table-layout: fixed; }
 thead th{ position:sticky; top:0; z-index:10; background:var(--purple-soft); border-bottom:2px solid var(--border); padding:10px 12px; text-align:left; font-weight:600; white-space:nowrap; vertical-align:middle; }
 th, td{ padding:10px 12px; white-space:normal; word-break:normal; overflow-wrap:break-word; border-bottom:1px solid var(--border); }
 tbody td{ vertical-align:top }

@@ -5,16 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
-  <!-- PapaParse (CSV parser) -->
+  <!-- PapaParse для CSV -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- SheetJS (XLSX) для экспорта в .xlsx -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header>
     <div class="header-inner">
-      <h1>Функциональная матрица</h1>
-      <p class="subtitle">Интерактивный просмотр ролей и ответственности</p>
+      <!-- картинка 900x900: помести файл assets/header-image.png в репо -->
+      <img src="header-image.png" alt="Logo" class="header-image" width="90" height="90" />
+      <div class="title-block">
+        <h1>Функциональная матрица</h1>
+        <p class="subtitle">Интерактивный просмотр ролей и ответственности</p>
+      </div>
     </div>
   </header>
 
@@ -44,8 +50,9 @@
       <select id="filter-role"></select>
     </div>
 
-    <div class="filter reset">
+    <div class="filter actions">
       <button id="clear">Сбросить</button>
+      <button id="export">Экспорт в Excel</button>
     </div>
   </section>
 
@@ -77,6 +84,9 @@
       </table>
     </div>
   </main>
+
+  <!-- toast -->
+  <div id="toast" class="toast hidden"></div>
 
   <script src="app.js"></script>
 </body>

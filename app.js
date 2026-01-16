@@ -1,4 +1,5 @@
 const DATA_URL = 'data.csv';
+const STORAGE_KEY = 'matrix_filters_v1';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции. Назначает исполнителей, контролирует сроки и качество.',
@@ -11,14 +12,16 @@ const ROLE_INFO = {
 };
 
 let rawRows = [];
+let lastRenderedRows = []; 
 
 const FILTER_IDS = ['filter-function','filter-department','filter-division','filter-position','filter-role'];
 
 document.addEventListener('DOMContentLoaded', () => {
   loadCSV();
+  const exportBtn = document.getElementById('export');
+  if (exportBtn) exportBtn.addEventListener('click', onExportClick);
 });
 
-/* Load & parse CSV with PapaParse (handles quotes/newlines) */
 function loadCSV(){
   fetch(DATA_URL)
     .then(resp => {
@@ -31,17 +34,17 @@ function loadCSV(){
       if (parsed.errors && parsed.errors.length) console.warn('PapaParse errors:', parsed.errors.slice(0,10));
       rawRows = parsed.data.map(r => normalizeRow(r));
       initFilters();
+      restoreFiltersFromStorage();
       renderTable();
+      showToast('Данные загружены', 1500);
     })
     .catch(err => {
       console.error('Load CSV error:', err);
-      const info = document.getElementById('info');
-      if (info) { info.classList.remove('hidden'); info.textContent = 'Ошибка при загрузке данных: ' + err.message; }
+      showInfo('Ошибка при загрузке данных: ' + err.message, true);
     });
 }
 
 function normalizeRow(row){
-  // trim keys and values; remove BOM
   const out = {};
   Object.keys(row).forEach(k => {
     const key = String(k).replace(/^\uFEFF/, '').trim();
@@ -51,24 +54,19 @@ function normalizeRow(row){
   return out;
 }
 
-/* Initialize filter selects */
 function initFilters(){
-  // gather headers (first row) keys
   const headers = rawRows.length ? Object.keys(rawRows[0]) : [];
-  // Fill selects by finding probable header names in CSV
   fillSelect('filter-function', headers, ['function','функция','Функция','Function','name','Наименование','Наим']);
   fillSelect('filter-department', headers, ['department','департамент','Департамент','dept']);
   fillSelect('filter-division', headers, ['division','отдел','Отдел']);
   fillSelect('filter-position', headers, ['position','должность','Должность']);
   fillSelect('filter-role', headers, ['role','роль','Роль']);
 
-  // attach change handlers (ensure no duplicate handlers)
   FILTER_IDS.forEach(id => {
     const el = document.getElementById(id);
-    if (el) {
-      el.removeEventListener('change', onFilterChange);
-      el.addEventListener('change', onFilterChange);
-    }
+    if (!el) return;
+    el.removeEventListener('change', onFilterChange);
+    el.addEventListener('change', onFilterChange);
   });
 
   const clearBtn = document.getElementById('clear');
@@ -92,7 +90,6 @@ function fillSelect(selectId, headers, candidates){
   const sel = document.getElementById(selectId);
   if (!sel) return;
   let header = findHeaderByCandidates(headers, candidates);
-  // fuzzy fallback
   if (!header){
     for (let cand of candidates){
       for (let h of headers){
@@ -103,29 +100,24 @@ function fillSelect(selectId, headers, candidates){
       if (header) break;
     }
   }
-  // final fallback
   if (!header) header = headers[0] || null;
+  sel.dataset.csvHeader = header || '';
 
-  // collect unique values
   const vals = header ? Array.from(new Set(rawRows.map(r=>r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
   sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
-  // store mapped header name on element for later filtering
-  sel.dataset.csvHeader = header || '';
 }
 
-/* Handler for filter change */
 function onFilterChange(){
+  saveFiltersToStorage();
   cascadeFilters();
   renderTable();
 }
 
-/* Cascade: recompute options for all selects based on other selected values */
 function cascadeFilters(){
   FILTER_IDS.forEach(selId => {
     const sel = document.getElementById(selId);
     if (!sel) return;
     const header = sel.dataset.csvHeader;
-    // subset filtered by other selects (excluding this one)
     const subset = rawRows.filter(row => {
       return FILTER_IDS.every(otherId => {
         if (otherId === selId) return true;
@@ -144,29 +136,53 @@ function cascadeFilters(){
   });
 }
 
-/* Clear button behavior: now fully resets options and values */
 function onClearClick(){
-  // 1) clear values
   FILTER_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.value = ''; });
-  // 2) restore full option lists for each select (no filters applied)
-  //    easiest: recompute full unique lists based on rawRows and dataset csvHeader
-  FILTER_IDS.forEach(selId => {
-    const sel = document.getElementById(selId);
-    if (!sel) return;
-    const header = sel.dataset.csvHeader;
+  FILTER_IDS.forEach(id => {
+    const s = document.getElementById(id);
+    if (!s) return;
+    const header = s.dataset.csvHeader;
     const vals = header ? Array.from(new Set(rawRows.map(r => r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
-    sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
-    sel.value = '';
+    s.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
+    s.value = '';
   });
-  // 3) render table with no filters
+  localStorage.removeItem(STORAGE_KEY);
   renderTable();
+  showToast('Фильтры сброшены', 1200);
 }
 
-/* Render table using mapped headers stored in selects */
+function saveFiltersToStorage(){
+  const obj = {};
+  FILTER_IDS.forEach(id => {
+    const s = document.getElementById(id);
+    if (s) obj[id] = s.value || '';
+  });
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+}
+
+function restoreFiltersFromStorage(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+  try {
+    const obj = JSON.parse(raw);
+    let applied = false;
+    FILTER_IDS.forEach(id => {
+      const s = document.getElementById(id);
+      if (s && obj[id] !== undefined){
+        const optExists = Array.from(s.options).some(o => o.value === obj[id]);
+        if (obj[id] === '' || optExists) { s.value = obj[id]; applied = true; }
+      }
+    });
+    if (applied) cascadeFilters();
+  } catch(e){
+    console.warn('restore filters parse error', e);
+  }
+}
+
 function renderTable(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
-  // build active filters map {header: value}
+
   const active = {};
   FILTER_IDS.forEach(id => {
     const sel = document.getElementById(id);
@@ -176,6 +192,8 @@ function renderTable(){
   const rows = rawRows.filter(row => {
     return Object.entries(active).every(([hdr,val]) => !val || row[hdr] === val);
   });
+
+  lastRenderedRows = rows; 
 
   if (!rows.length){
     tbody.innerHTML = `<tr><td colspan="15" style="padding:18px 12px; color:#666">Нет данных по выбранным фильтрам</td></tr>`;
@@ -226,7 +244,75 @@ function renderTable(){
   }).join('');
 }
 
-/* small helpers */
+function onExportClick(){
+  if (!lastRenderedRows || !lastRenderedRows.length){
+    showToast('Нет данных для экспорта', 1500);
+    return;
+  }
+
+  const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль","Вход","От кого / как","Выход","Кому","Используемое ПО","Метрика","Как цифруем","Комментарий"];
+
+  const sheetData = lastRenderedRows.map(row => {
+    const get = (candidates) => {
+      for (let k of candidates) if (row[k] !== undefined) return row[k];
+      return '';
+    };
+    return {
+      "№": get(['№','number','No','no','id']),
+      "Функция": get(['Функция','function','Function','name']),
+      "Продукт": get(['Продукт','product']),
+      "Департамент": get(['Департамент','department']),
+      "Отдел": get(['Отдел','division']),
+      "Должность": get(['Должность','position']),
+      "Роль": get(['Роль','role']),
+      "Вход": get(['Вход','input']),
+      "От кого / как": get(['От кого','from_how','from']),
+      "Выход": get(['Выход','output']),
+      "Кому": get(['Кому','to_whom','to']),
+      "Используемое ПО": get(['ПО','software']),
+      "Метрика": get(['Метрика','metric']),
+      "Как цифруем": get(['Как цифруем','how_to_digitize']),
+      "Комментарий": get(['Комментарий','comment'])
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(sheetData, { header: headers });
+  const colWidths = headers.map(h => ({ wch: Math.max(10, Math.min(40, h.length + 8)) }));
+  ws['!cols'] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Matrix');
+
+  const now = new Date();
+  const ts = now.toISOString().replace(/[:\-]/g,'').split('.')[0];
+  const filename = `functional-matrix-${ts}.xlsx`;
+  XLSX.writeFile(wb, filename);
+
+  showToast('Экспорт завершён: ' + filename, 1800);
+}
+
+function showToast(text, ms = 1500){
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = text;
+  t.classList.remove('hidden');
+  t.classList.remove('toast-hidden');
+  t.style.opacity = '1';
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(()=> {
+    t.style.opacity = '0';
+    t.classList.add('hidden');
+  }, ms);
+}
+
+function showInfo(msg, important=false){
+  const el = document.getElementById('info');
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.textContent = msg;
+  el.style.border = important ? '1px solid #ffdede' : 'none';
+}
+
 function escapeHtml(s){
   if (s == null) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');

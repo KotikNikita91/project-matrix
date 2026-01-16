@@ -1,7 +1,3 @@
-/* app.js — robust CSV load + cascading filters + centered role cell
-   Place data.csv next to index.html.
-*/
-
 const DATA_URL = 'data.csv';
 
 const ROLE_INFO = {
@@ -16,7 +12,6 @@ const ROLE_INFO = {
 
 let rawRows = [];
 
-/* Filters configuration: select element ids */
 const FILTER_IDS = ['filter-function','filter-department','filter-division','filter-position','filter-role'];
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,7 +55,6 @@ function normalizeRow(row){
 function initFilters(){
   // gather headers (first row) keys
   const headers = rawRows.length ? Object.keys(rawRows[0]) : [];
-  // map some common header names to logical ones — but we will be permissive
   // Fill selects by finding probable header names in CSV
   fillSelect('filter-function', headers, ['function','функция','Функция','Function','name','Наименование','Наим']);
   fillSelect('filter-department', headers, ['department','департамент','Департамент','dept']);
@@ -68,16 +62,20 @@ function initFilters(){
   fillSelect('filter-position', headers, ['position','должность','Должность']);
   fillSelect('filter-role', headers, ['role','роль','Роль']);
 
-  // attach change handlers
+  // attach change handlers (ensure no duplicate handlers)
   FILTER_IDS.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('change', onFilterChange);
+    if (el) {
+      el.removeEventListener('change', onFilterChange);
+      el.addEventListener('change', onFilterChange);
+    }
   });
+
   const clearBtn = document.getElementById('clear');
-  if (clearBtn) clearBtn.addEventListener('click', () => {
-    FILTER_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.value = ''; });
-    renderTable();
-  });
+  if (clearBtn) {
+    clearBtn.removeEventListener('click', onClearClick);
+    clearBtn.addEventListener('click', onClearClick);
+  }
 }
 
 function findHeaderByCandidates(headers, candidates){
@@ -94,7 +92,7 @@ function fillSelect(selectId, headers, candidates){
   const sel = document.getElementById(selectId);
   if (!sel) return;
   let header = findHeaderByCandidates(headers, candidates);
-  // if not found, try some fuzzy match: header names that contain candidate substring
+  // fuzzy fallback
   if (!header){
     for (let cand of candidates){
       for (let h of headers){
@@ -105,8 +103,9 @@ function fillSelect(selectId, headers, candidates){
       if (header) break;
     }
   }
-  // if still not found, fallback to first header (harmless)
+  // final fallback
   if (!header) header = headers[0] || null;
+
   // collect unique values
   const vals = header ? Array.from(new Set(rawRows.map(r=>r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
   sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
@@ -114,19 +113,19 @@ function fillSelect(selectId, headers, candidates){
   sel.dataset.csvHeader = header || '';
 }
 
+/* Handler for filter change */
 function onFilterChange(){
-  // simple cascading: update other selects to only include matching values
   cascadeFilters();
   renderTable();
 }
 
+/* Cascade: recompute options for all selects based on other selected values */
 function cascadeFilters(){
-  // For each select, rebuild options based on other active filters
   FILTER_IDS.forEach(selId => {
     const sel = document.getElementById(selId);
     if (!sel) return;
     const header = sel.dataset.csvHeader;
-    // build subset filtered by other selects
+    // subset filtered by other selects (excluding this one)
     const subset = rawRows.filter(row => {
       return FILTER_IDS.every(otherId => {
         if (otherId === selId) return true;
@@ -138,12 +137,29 @@ function cascadeFilters(){
         return row[hdr] === val;
       });
     });
-    // compute unique values for this header in subset
     const vals = header ? Array.from(new Set(subset.map(r => r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
     const prev = sel.value;
     sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
     if (prev && vals.includes(prev)) sel.value = prev; else sel.value = '';
   });
+}
+
+/* Clear button behavior: now fully resets options and values */
+function onClearClick(){
+  // 1) clear values
+  FILTER_IDS.forEach(id => { const s = document.getElementById(id); if (s) s.value = ''; });
+  // 2) restore full option lists for each select (no filters applied)
+  //    easiest: recompute full unique lists based on rawRows and dataset csvHeader
+  FILTER_IDS.forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const header = sel.dataset.csvHeader;
+    const vals = header ? Array.from(new Set(rawRows.map(r => r[header]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru')) : [];
+    sel.innerHTML = '<option value="">Все</option>' + vals.map(v => `<option value="${escapeHtmlAttr(v)}">${escapeHtml(v)}</option>`).join('');
+    sel.value = '';
+  });
+  // 3) render table with no filters
+  renderTable();
 }
 
 /* Render table using mapped headers stored in selects */
@@ -166,19 +182,16 @@ function renderTable(){
     return;
   }
 
-  // render rows: ensure role cell contains rolewrap wrapper which centers its content
   tbody.innerHTML = rows.map(row => {
     const getValue = (possibleKeys) => {
-      // try direct header names first (common Russian names)
       for (let k of possibleKeys) if (row[k] !== undefined) return row[k];
-      // fallback to first column
       return row[Object.keys(row)[0]] || '';
     };
 
     const num = getValue(['№','number','No','no','id']);
     const func = getValue(['Функция','function','Function','name']);
     const product = getValue(['Продукт','product']);
-    const department = getValue(['Департамент','department','dept']);
+    const department = getValue(['Департамент','department']);
     const division = getValue(['Отдел','division']);
     const position = getValue(['Должность','position']);
     const roleKey = getValue(['Роль','role']);
@@ -193,7 +206,6 @@ function renderTable(){
 
     const roleDesc = ROLE_INFO[roleKey] || '';
 
-    // role cell uses rolewrap -> role (the wrapper centers it vertically)
     return `<tr>
       <td class="col-id">${escapeHtml(num)}</td>
       <td class="col-function">${escapeHtml(func)}</td>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
+  <!-- PapaParse + SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
@@ -22,7 +23,6 @@
 
     <div class="header-right">
       <div class="controls-compact">
-        <!-- custom multiselect controls (JS replaces content) -->
         <div class="filter-compact">
           <label>Функция</label>
           <div class="multiselect" id="filter-function" data-filter="function" data-placeholder="Все"></div>
@@ -61,7 +61,6 @@
 
     <div class="table-wrapper" id="table-wrapper">
       <table id="matrix" aria-describedby="info">
-        <!-- colgroup статичен: 7 колонок -->
         <colgroup>
           <col class="c1" />
           <col class="c2" />
@@ -74,19 +73,22 @@
 
         <thead>
           <tr>
-            <th class="col-id">№</th>
-            <th class="col-function">Функция</th>
-            <th class="col-text-medium">Продукт</th>
-            <th class="col-department">Департамент</th>
-            <th class="col-division">Отдел</th>
-            <th class="col-position">Должность</th>
-            <th class="col-role">Роль</th>
+            <th data-key="num" class="col-id sortable">№ <span class="sort-arrow"></span></th>
+            <th data-key="func" class="col-function sortable">Функция <span class="sort-arrow"></span></th>
+            <th data-key="product" class="col-text-medium sortable">Продукт <span class="sort-arrow"></span></th>
+            <th data-key="department" class="col-department sortable">Департамент <span class="sort-arrow"></span></th>
+            <th data-key="division" class="col-division sortable">Отдел <span class="sort-arrow"></span></th>
+            <th data-key="position" class="col-position sortable">Должность <span class="sort-arrow"></span></th>
+            <th data-key="role" class="col-role sortable">Роль <span class="sort-arrow"></span></th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
     </div>
   </main>
+
+  <!-- single floating tooltip (appends to body) -->
+  <div id="floating-tooltip" class="floating-tooltip hidden" role="tooltip"></div>
 
   <!-- toast -->
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>

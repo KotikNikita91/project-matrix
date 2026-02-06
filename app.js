@@ -1,9 +1,4 @@
-/* app.js — details-based multiselects
-   - стабильный выпадающий мультиселект на <details>
-   - множественный выбор, кнопки Выбрать всё/Очистить
-   - каскад, сохранение, экспорт, сортировка, тултипы
-*/
-
+/* app.js — обновлён: направленный каскад (иерархия), корректный reset, группировка от 3 */
 const DATA_URL = 'data.csv';
 const STORAGE_KEY = 'matrix_details_filters_v1';
 
@@ -40,13 +35,11 @@ let lastRenderedRows = [];
 let sortState = { key: null, dir: 1 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  // build filter placeholders in header (so markup exists before data)
   buildFilterPlaceholders();
 
   document.getElementById('clear').addEventListener('click', onClearFilters);
   document.getElementById('export').addEventListener('click', onExport);
 
-  // sorting headers
   document.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
@@ -77,39 +70,29 @@ function buildFilterPlaceholders(){
     const label = document.createElement('label');
     label.textContent = cfg.label;
     wrapper.appendChild(label);
-    // details skeleton: will be filled after data load
     const details = document.createElement('details');
     details.className = 'details-multi';
     details.dataset.filterId = cfg.id;
-    // summary
     const summary = document.createElement('summary');
     summary.innerHTML = `<div class="details-display"><div class="placeholder">Все</div></div><div class="details-caret">▾</div>`;
     details.appendChild(summary);
-    // panel container
     const panel = document.createElement('div');
     panel.className = 'details-panel';
-    panel.style.display = 'none'; // initially hidden; will be shown when details[open]
+    panel.style.display = 'none';
     details.appendChild(panel);
 
-    // hook behaviors: summary click will toggle and stop propagation to document
     summary.addEventListener('click', (e) => {
-      // in some browsers click toggles open automatically; we simply stop propagation to avoid accidental document handlers
       e.stopPropagation();
-      // close other details
       document.querySelectorAll('.details-multi').forEach(d => { if (d !== details) d.removeAttribute('open'); });
-      // panel display toggling
-      setTimeout(() => { // small timeout to let browser set open attribute
+      setTimeout(() => {
         if (details.hasAttribute('open')) panel.style.display = 'block'; else panel.style.display = 'none';
       }, 0);
     });
 
-    // clicking inside panel should not close parent (stop propagation)
     panel.addEventListener('click', (e) => e.stopPropagation());
-
     wrapper.appendChild(details);
   });
 
-  // close details when clicking outside
   document.addEventListener('click', () => {
     document.querySelectorAll('.details-multi').forEach(d => { d.removeAttribute('open'); const p = d.querySelector('.details-panel'); if (p) p.style.display='none'; });
   });
@@ -145,16 +128,11 @@ function normalizeRow(row){
   return out;
 }
 
-/* map headers to logical keys and set dataset on details elements */
 function mapHeaders(headers){
   FILTER_CONFIG.forEach(cfg => {
     const hdr = findHeaderByCandidates(headers, cfg.keyCandidates);
     const details = document.querySelector(`.details-multi[data-filter-id="${cfg.id}"]`);
     if (details) details.dataset.csvHeader = hdr || '';
-  });
-  // also store mapping for LOGICAL_FIELDS (not necessary but helpful)
-  Object.entries(LOGICAL_FIELDS).forEach(([k,cands]) => {
-    // nothing global needed; we'll use findFieldValue for row lookups
   });
 }
 
@@ -182,7 +160,6 @@ function buildDetailsOptions(){
     const panel = details.querySelector('.details-panel');
     panel.innerHTML = '';
 
-    // actions
     const actions = document.createElement('div');
     actions.className = 'panel-actions';
     const btnAll = document.createElement('button'); btnAll.type='button'; btnAll.textContent='Выбрать всё';
@@ -190,12 +167,10 @@ function buildDetailsOptions(){
     actions.appendChild(btnAll); actions.appendChild(btnClear);
     panel.appendChild(actions);
 
-    // options container
     const options = document.createElement('div');
     options.className = 'options-list';
     panel.appendChild(options);
 
-    // populate values
     const vals = hdr ? Array.from(new Set(rawRows.map(r => r[hdr]).filter(Boolean))) : [];
     vals.sort((a,b)=>a.localeCompare(b,'ru'));
     vals.forEach(v => {
@@ -208,11 +183,9 @@ function buildDetailsOptions(){
       options.appendChild(row);
     });
 
-    // actions handlers
     btnAll.addEventListener('click', (e) => { e.stopPropagation(); Array.from(panel.querySelectorAll('input[type=checkbox]')).forEach(ch => ch.checked = true); onDetailsSelectionChange(cfg.id); });
     btnClear.addEventListener('click', (e) => { e.stopPropagation(); Array.from(panel.querySelectorAll('input[type=checkbox]')).forEach(ch => ch.checked = false); onDetailsSelectionChange(cfg.id); });
 
-    // render display (placeholder or chips)
     renderDetailsDisplay(cfg.id);
   });
 }
@@ -233,7 +206,9 @@ function setDetailsSelectedValues(filterId, arr){
   renderDetailsDisplay(filterId);
 }
 
-/* update the summary display (chips or placeholder) */
+/* update the summary display (chips or placeholder)
+   Changed threshold: show individual labels only when <=2; when 3+ show "N выбрано"
+*/
 function renderDetailsDisplay(filterId){
   const details = document.querySelector(`.details-multi[data-filter-id="${filterId}"]`);
   if (!details) return;
@@ -244,58 +219,107 @@ function renderDetailsDisplay(filterId){
   if (!vals.length){
     const ph = document.createElement('div'); ph.className='placeholder'; ph.textContent='Все';
     display.appendChild(ph);
-  } else if (vals.length <= 3){
+  } else if (vals.length <= 2){ // <<< threshold changed to 2 so grouping starts at 3
     vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); });
   } else {
     const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
   }
-  // caret handled by CSS
 }
 
-/* called when user changes checkbox inside details panel */
+/* called when user changes checkbox inside details panel
+   We now run a directed cascade: only downstream filters (indexes > changed) are updated.
+*/
 function onDetailsSelectionChange(filterId){
   renderDetailsDisplay(filterId);
   saveFilters();
-  cascadeFilters();
+  const changedIndex = FILTER_CONFIG.findIndex(f => f.id === filterId);
+  cascadeFilters(changedIndex);
   renderTable();
 }
 
-/* cascade filtering: recompute allowed options for each filter */
-function cascadeFilters(){
-  FILTER_CONFIG.forEach(cfg => {
-    const details = document.querySelector(`.details-multi[data-filter-id="${cfg.id}"]`);
-    if (!details) return;
-    const hdr = details.dataset.csvHeader;
-    if (!hdr) return;
-    // subset of rows matching other filters
-    const subset = rawRows.filter(r => {
-      return FILTER_CONFIG.every(other => {
-        if (other.id === cfg.id) return true;
-        const otherDetails = document.querySelector(`.details-multi[data-filter-id="${other.id}"]`);
-        if (!otherDetails) return true;
-        const sel = getDetailsSelectedValues(other.id);
-        if (!sel.length) return true;
-        return sel.includes(r[ otherDetails.dataset.csvHeader ]);
+/* Directed cascade:
+   - If changedIndex >= 0 : update filters with index j = changedIndex+1 .. end.
+     For each j compute allowed values using selections of filters 0..j-1 (i.e. higher-level filters),
+     then rebuild options for j preserving currently selected values that are still allowed.
+   - If changedIndex < 0 : initial/total rebuild — compute sequentially for all filters j=0..end
+     using higher-level selections (none at start) so options are full.
+*/
+function cascadeFilters(changedIndex = -1){
+  if (changedIndex >= 0){
+    for (let j = changedIndex + 1; j < FILTER_CONFIG.length; j++){
+      const cfgJ = FILTER_CONFIG[j];
+      const detailsJ = document.querySelector(`.details-multi[data-filter-id="${cfgJ.id}"]`);
+      if (!detailsJ) continue;
+      const hdrJ = detailsJ.dataset.csvHeader;
+      // compute subset filtered by higher-level filters 0..j-1
+      const subset = rawRows.filter(r => {
+        for (let i = 0; i < j; i++){
+          const cfgI = FILTER_CONFIG[i];
+          const detailsI = document.querySelector(`.details-multi[data-filter-id="${cfgI.id}"]`);
+          if (!detailsI) continue;
+          const sel = getDetailsSelectedValues(cfgI.id);
+          if (!sel.length) continue;
+          const hdrI = detailsI.dataset.csvHeader;
+          if (!sel.includes(r[hdrI])) return false;
+        }
+        return true;
       });
-    });
-    const allowed = Array.from(new Set(subset.map(r => r[hdr]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru'));
-    // rebuild options but preserve selections
-    const current = getDetailsSelectedValues(cfg.id);
-    const panel = details.querySelector('.details-panel');
-    const opts = panel.querySelector('.options-list');
-    opts.innerHTML = '';
-    allowed.forEach(v => {
-      const row = document.createElement('div'); row.className='opt';
-      const id = `${cfg.id}___${Math.abs(hashString(v))}`;
-      const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.value=v;
-      if (current.includes(v)) input.checked = true;
-      const label = document.createElement('label'); label.htmlFor=id; label.textContent = v;
-      input.addEventListener('change',(e)=>{ e.stopPropagation(); onDetailsSelectionChange(cfg.id); });
-      row.appendChild(input); row.appendChild(label);
-      opts.appendChild(row);
-    });
-    renderDetailsDisplay(cfg.id);
-  });
+      const allowed = Array.from(new Set(subset.map(r => r[hdrJ]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru'));
+      // rebuild options for j, preserving intersection of current selection and allowed
+      const panel = detailsJ.querySelector('.details-panel');
+      const opts = panel.querySelector('.options-list');
+      const current = getDetailsSelectedValues(cfgJ.id);
+      opts.innerHTML = '';
+      allowed.forEach(v => {
+        const row = document.createElement('div'); row.className='opt';
+        const id = `${cfgJ.id}___${Math.abs(hashString(v))}`;
+        const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.value=v;
+        if (current.includes(v)) input.checked = true;
+        const label = document.createElement('label'); label.htmlFor=id; label.textContent = v;
+        input.addEventListener('change',(e)=>{ e.stopPropagation(); onDetailsSelectionChange(cfgJ.id); });
+        row.appendChild(input); row.appendChild(label);
+        opts.appendChild(row);
+      });
+      renderDetailsDisplay(cfgJ.id);
+    }
+  } else {
+    // full sequential rebuild (initialization)
+    for (let j = 0; j < FILTER_CONFIG.length; j++){
+      const cfgJ = FILTER_CONFIG[j];
+      const detailsJ = document.querySelector(`.details-multi[data-filter-id="${cfgJ.id}"]`);
+      if (!detailsJ) continue;
+      const hdrJ = detailsJ.dataset.csvHeader;
+      // compute subset matching higher-level filters 0..j-1 (none at start)
+      const subset = rawRows.filter(r => {
+        for (let i = 0; i < j; i++){
+          const cfgI = FILTER_CONFIG[i];
+          const detailsI = document.querySelector(`.details-multi[data-filter-id="${cfgI.id}"]`);
+          if (!detailsI) continue;
+          const sel = getDetailsSelectedValues(cfgI.id);
+          if (!sel.length) continue;
+          const hdrI = detailsI.dataset.csvHeader;
+          if (!sel.includes(r[hdrI])) return false;
+        }
+        return true;
+      });
+      const allowed = Array.from(new Set(subset.map(r => r[hdrJ]).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'ru'));
+      const panel = detailsJ.querySelector('.details-panel');
+      const opts = panel.querySelector('.options-list');
+      const current = getDetailsSelectedValues(cfgJ.id);
+      opts.innerHTML = '';
+      allowed.forEach(v => {
+        const row = document.createElement('div'); row.className='opt';
+        const id = `${cfgJ.id}___${Math.abs(hashString(v))}`;
+        const input = document.createElement('input'); input.type='checkbox'; input.id=id; input.value=v;
+        if (current.includes(v)) input.checked = true;
+        const label = document.createElement('label'); label.htmlFor=id; label.textContent = v;
+        input.addEventListener('change',(e)=>{ e.stopPropagation(); onDetailsSelectionChange(cfgJ.id); });
+        row.appendChild(input); row.appendChild(label);
+        opts.appendChild(row);
+      });
+      renderDetailsDisplay(cfgJ.id);
+    }
+  }
 }
 
 /* save / restore filters */
@@ -311,22 +335,40 @@ function restoreFilters(){
     const obj = JSON.parse(raw);
     FILTER_CONFIG.forEach(cfg => {
       const vals = obj[cfg.id] || [];
-      // if options not built yet, apply after build
       setDetailsSelectedValues(cfg.id, vals);
     });
-    cascadeFilters();
+    cascadeFilters(-1); // full rebuild consistent with restored values
   } catch(e){ console.warn('restore filters err', e); }
 }
 
 /* clear */
 function onClearFilters(){
+  // uncheck everything, rebuild options from rawRows, close panels, remove storage
   FILTER_CONFIG.forEach(cfg => {
     const details = document.querySelector(`.details-multi[data-filter-id="${cfg.id}"]`);
     if (!details) return;
     Array.from(details.querySelectorAll('input[type=checkbox]')).forEach(i => i.checked = false);
+    // rebuild full options for this filter
+    const hdr = details.dataset.csvHeader;
+    const panel = details.querySelector('.details-panel');
+    const opts = panel.querySelector('.options-list');
+    opts.innerHTML = '';
+    const vals = hdr ? Array.from(new Set(rawRows.map(r => r[hdr]).filter(Boolean))) : [];
+    vals.sort((a,b)=>a.localeCompare(b,'ru'));
+    vals.forEach(v => {
+      const row = document.createElement('div'); row.className='opt';
+      const id = `${cfg.id}___${Math.abs(hashString(v))}`;
+      const input = document.createElement('input'); input.type='checkbox'; input.id = id; input.value = v;
+      const label = document.createElement('label'); label.htmlFor = id; label.textContent = v;
+      input.addEventListener('change',(e)=>{ e.stopPropagation(); onDetailsSelectionChange(cfg.id); });
+      row.appendChild(input); row.appendChild(label);
+      opts.appendChild(row);
+    });
     renderDetailsDisplay(cfg.id);
   });
   localStorage.removeItem(STORAGE_KEY);
+  // close all panels
+  document.querySelectorAll('.details-multi').forEach(d => { d.removeAttribute('open'); const p = d.querySelector('.details-panel'); if (p) p.style.display='none';});
   renderTable();
   showToast('Фильтры сброшены', 900);
 }
@@ -336,7 +378,7 @@ function renderTable(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
-  // active filter map
+  // active filter map (header -> selected values)
   const active = {};
   FILTER_CONFIG.forEach(cfg => {
     const details = document.querySelector(`.details-multi[data-filter-id="${cfg.id}"]`);
@@ -351,7 +393,6 @@ function renderTable(){
     });
   });
 
-  // sorting
   if (sortState.key){
     const cand = LOGICAL_FIELDS[sortState.key] || LOGICAL_FIELDS['func'];
     rows.sort((a,b) => {
@@ -395,7 +436,6 @@ function renderTable(){
   attachTooltips();
 }
 
-/* get value by candidate header names */
 function getFieldValue(row, candidates){
   for (let c of candidates) if (row[c] !== undefined) return row[c];
   return '';
@@ -444,7 +484,7 @@ function positionTooltip(tip, el){
   tip.style.top = top + 'px';
 }
 
-/* Export (xlsx) of currently rendered rows */
+/* Export (xlsx) */
 function onExport(){
   if (!lastRenderedRows || !lastRenderedRows.length){ showToast('Нет данных для экспорта', 1200); return; }
   const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль"];
@@ -475,6 +515,6 @@ function onExport(){
 /* utils */
 function showInfo(msg, important=false){ const el=document.getElementById('info'); if(!el) return; el.classList.remove('hidden'); el.textContent=msg; el.style.border = important ? '1px solid #ffdede' : 'none'; }
 function hideInfo(){ const el=document.getElementById('info'); if(!el) return; el.classList.add('hidden'); el.textContent=''; el.style.border='none'; }
-function showToast(msg, ms=1200){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.remove('hidden'); clearTimeout(t._to); t._to = setTimeout(()=> t.classList.add('hidden'), ms); }
+function showToast(msg, ms=1200){ const t=document.getElementById('toast'); if(!t) return; t.textContent = msg; t.classList.remove('hidden'); clearTimeout(t._to); t._to = setTimeout(()=> t.classList.add('hidden'), ms); }
 function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function escapeHtmlAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }

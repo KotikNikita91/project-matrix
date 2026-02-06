@@ -1,6 +1,9 @@
+/* app.js — исправлены: multiselect toggle надежно работает; тултип плавающий с жирным шрифтом; сортировка/экспорт/фильтры сохранены */
+
 const DATA_URL = 'data.csv';
 const STORAGE_FILTERS = 'matrix_filters_v3';
 
+/* role descriptions */
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции. Назначает исполнителей, контролирует сроки и качество.',
   'В': 'Выполняющий: непосредственно выполняет работу по поручению ответственного.',
@@ -38,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('clear').addEventListener('click', onClearClick);
   document.getElementById('export').addEventListener('click', onExportClick);
 
+  // attach header sorting handlers
   document.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
@@ -48,13 +52,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // floating tooltip element (create once)
+  // ensure single floating tooltip element exists
   if (!document.getElementById('floating-tooltip')) {
     const tip = document.createElement('div');
     tip.id = 'floating-tooltip';
     tip.className = 'floating-tooltip hidden';
     document.body.appendChild(tip);
   }
+
+  // global click handler: close any open panels when clicking outside
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('.multiselect-panel').forEach(panel => {
+      const parent = panel.parentElement;
+      if (!parent) return;
+      if (!parent.contains(e.target)) panel.classList.add('hidden');
+    });
+  });
 
   loadCSV();
 });
@@ -90,7 +103,7 @@ function loadCSV(){
     })
     .catch(err => { console.error(err); showInfo('Ошибка при загрузке данных: ' + err.message, true); });
 }
-function normalizeRow(row){ const out = {}; Object.keys(row).forEach(k=>{ const key = String(k).replace(/^\uFEFF/,'').trim(); const val = row[k]==null ? '' : String(row[k]).replace(/\r/g,'').trim(); out[key]=val; }); return out; }
+function normalizeRow(row){ const out={}; Object.keys(row).forEach(k=>{ const key=String(k).replace(/^\uFEFF/,'').trim(); const val = row[k]==null ? '' : String(row[k]).replace(/\r/g,'').trim(); out[key]=val; }); return out; }
 
 /* header mapping */
 function findHeaderByCandidates(headers, candidates){
@@ -100,8 +113,8 @@ function findHeaderByCandidates(headers, candidates){
   return null;
 }
 function buildHeaderMap(headers){
-  headerMap = {};
-  Object.entries(LOGICAL_FIELDS).forEach(([k,cands]) => { headerMap[k] = findHeaderByCandidates(headers, cands) || headers[0] || ''; });
+  headerMap={};
+  Object.entries(LOGICAL_FIELDS).forEach(([k,cands]) => headerMap[k]=findHeaderByCandidates(headers,cands)||headers[0]||'');
   FILTER_CONFIG.forEach(f => {
     const found = findHeaderByCandidates(headers, f.keyCandidates);
     const el = document.getElementById(f.id);
@@ -109,7 +122,7 @@ function buildHeaderMap(headers){
   });
 }
 
-/* multiselect construction */
+/* multiselects */
 function buildAllMultiselects(){ FILTER_CONFIG.forEach(cfg => buildMultiselect(cfg.id)); }
 
 function buildMultiselect(containerId){
@@ -118,10 +131,16 @@ function buildMultiselect(containerId){
   container.innerHTML = '';
   container.classList.add('multiselect');
 
-  const display = document.createElement('div'); display.className='display'; container.appendChild(display);
-  const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;'; display.appendChild(chevron);
+  const display = document.createElement('div'); display.className='display';
+  // ensure display is focusable for keyboard later
+  display.tabIndex = 0;
+  container.appendChild(display);
 
-  const panel = document.createElement('div'); panel.className='multiselect-panel hidden'; container.appendChild(panel);
+  const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;';
+  display.appendChild(chevron);
+
+  const panel = document.createElement('div'); panel.className='multiselect-panel hidden';
+  container.appendChild(panel);
 
   const actions = document.createElement('div'); actions.className='panel-actions';
   const selectAllBtn = document.createElement('button'); selectAllBtn.type='button'; selectAllBtn.textContent='Выбрать всё';
@@ -133,33 +152,22 @@ function buildMultiselect(containerId){
 
   refreshMultiselectOptions(containerId);
 
-  // panel toggle on click of container (but ignore clicks inside panel)
-  container.addEventListener('click', (e) => {
-    if (e.target.closest('.multiselect-panel')) return;
-    panel.classList.toggle('hidden');
-    // hide other panels
+  // toggle panel on click of display (not entire container) — avoids accidental closure ordering
+  display.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // close other panels
     document.querySelectorAll('.multiselect-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
-    e.stopPropagation();
+    panel.classList.toggle('hidden');
   });
 
-  // close on outside click
-  document.addEventListener('click', (e) => {
-    if (!container.contains(e.target)) panel.classList.add('hidden');
+  // keyboard support: Enter/Space toggles
+  display.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); display.click(); }
   });
 
-  // actions
-  selectAllBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const inputs = list.querySelectorAll('input[type=checkbox]');
-    inputs.forEach(i => i.checked = true);
-    onMultiselectChange(containerId);
-  });
-  clearBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const inputs = list.querySelectorAll('input[type=checkbox]');
-    inputs.forEach(i => i.checked = false);
-    onMultiselectChange(containerId);
-  });
+  // panel actions
+  selectAllBtn.addEventListener('click', (e) => { e.stopPropagation(); const inputs = list.querySelectorAll('input[type=checkbox]'); inputs.forEach(i => i.checked = true); onMultiselectChange(containerId); });
+  clearBtn.addEventListener('click', (e) => { e.stopPropagation(); const inputs = list.querySelectorAll('input[type=checkbox]'); inputs.forEach(i => i.checked = false); onMultiselectChange(containerId); });
 }
 
 /* refresh options for multiselect from data (allowedValues optional) */
@@ -186,32 +194,15 @@ function refreshMultiselectOptions(containerId, allowedValues=null){
   renderMultiselectDisplay(containerId);
 }
 function hashString(s){ let h=0; for (let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i); return (h>>>0).toString(36); }
-
-function getMultiselectValues(id){
-  const container = document.getElementById(id);
-  if (!container) return [];
-  return Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value);
-}
-function setMultiselectValues(id, values){
-  const container = document.getElementById(id);
-  if (!container) return;
-  const inputs = Array.from(container.querySelectorAll('input[type=checkbox]'));
-  inputs.forEach(i => i.checked = values.includes(i.value));
-  renderMultiselectDisplay(id);
-}
+function getMultiselectValues(id){ const container = document.getElementById(id); if (!container) return []; return Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value); }
+function setMultiselectValues(id, values){ const container = document.getElementById(id); if (!container) return; const inputs = Array.from(container.querySelectorAll('input[type=checkbox]')); inputs.forEach(i => i.checked = values.includes(i.value)); renderMultiselectDisplay(id); }
 function renderMultiselectDisplay(id){
-  const container = document.getElementById(id);
-  if (!container) return;
-  const display = container.querySelector('.display');
-  display.innerHTML = '';
+  const container = document.getElementById(id); if (!container) return;
+  const display = container.querySelector('.display'); display.innerHTML='';
   const vals = getMultiselectValues(id);
-  if (!vals.length){
-    const ph = document.createElement('div'); ph.className='placeholder'; ph.textContent = container.dataset.placeholder || 'Все'; display.appendChild(ph);
-  } else if (vals.length <= 3){
-    vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); });
-  } else {
-    const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
-  }
+  if (!vals.length){ const ph = document.createElement('div'); ph.className='placeholder'; ph.textContent = container.dataset.placeholder || 'Все'; display.appendChild(ph); }
+  else if (vals.length <= 3){ vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); }); }
+  else { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip); }
   const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;'; display.appendChild(chevron);
 }
 
@@ -241,7 +232,6 @@ function cascadeFilters(){
     const allowed = Array.from(new Set(subset.map(r=>r[header]).filter(Boolean)));
     allowed.sort((a,b)=>a.localeCompare(b,'ru'));
     refreshMultiselectOptions(containerId, allowed);
-    // restore saved but only allowed ones
     const saved = loadFiltersFromStorageFor(containerId) || [];
     const inputs = Array.from(document.getElementById(containerId).querySelectorAll('input[type=checkbox]')).map(i=>i.value);
     const toSet = saved.filter(v => inputs.includes(v));
@@ -334,55 +324,59 @@ function getFieldValue(row, candidates){
 function attachRoleTooltips(){
   const tip = document.getElementById('floating-tooltip');
   if (!tip) return;
-  // hide by default
   tip.className = 'floating-tooltip hidden';
 
-  // remove previous listeners by cloning nodes? Easiest: delegate on tbody
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
-  // remove existing listeners by replacing tbody? Simpler: add delegation
-  tbody.removeEventListener('_role_mousemove', roleMouseMoveHandler); // harmless if not bound
-  tbody.addEventListener('mousemove', roleMouseMoveHandler);
-  tbody.removeEventListener('mouseout', roleMouseOutHandler);
-  tbody.addEventListener('mouseout', roleMouseOutHandler);
+  // remove previous delegated listeners by cloning (simple reset)
+  const newTbody = tbody.cloneNode(true);
+  tbody.parentNode.replaceChild(newTbody, tbody);
 
-  function roleMouseMoveHandler(e){
+  // delegate mouseenter/mouseleave on new tbody
+  newTbody.addEventListener('mouseover', (e) => {
     const el = e.target.closest('.role');
     if (!el) return;
-    const text = el.dataset.tooltip || el.getAttribute('data-tooltip') || el.title || el.dataset.title || '';
+    const text = el.dataset.tooltip || el.getAttribute('data-tooltip') || el.title || '';
     if (!text) return;
-    // position near the element — prefer right, else left
-    const rect = el.getBoundingClientRect();
     tip.innerHTML = text;
     tip.className = 'floating-tooltip show';
-    // compute placement
-    const margin = 10;
-    const tipW = Math.min(360, window.innerWidth - 40);
-    tip.style.maxWidth = tipW + 'px';
-    // try place to the right
-    const rightX = rect.right + margin;
-    const leftX = rect.left - margin - tipW;
-    let top = rect.top + (rect.height/2) - 20;
-    if (top < 8) top = 8;
-    if (top + tip.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - tip.offsetHeight);
-    if (rightX + tipW < window.innerWidth - 8) {
-      tip.style.left = (rightX) + 'px';
-    } else if (leftX > 8) {
-      tip.style.left = (leftX) + 'px';
-    } else {
-      // fallback near center
-      tip.style.left = Math.max(8, Math.min(window.innerWidth - tipW - 8, rect.right + margin)) + 'px';
-    }
-    tip.style.top = (top) + 'px';
-  }
+    positionTooltipNearElement(tip, el);
+  });
 
-  function roleMouseOutHandler(e){
+  newTbody.addEventListener('mousemove', (e) => {
+    const el = e.target.closest('.role');
+    if (!el) { tip.className = 'floating-tooltip hidden'; return; }
+    positionTooltipNearElement(tip, el);
+  });
+
+  newTbody.addEventListener('mouseout', (e) => {
     const el = e.target.closest('.role');
     if (!el) return;
-    // hide tooltip when moving out of role element (or when leaving tbody)
     tip.className = 'floating-tooltip hidden';
+  });
+}
+
+function positionTooltipNearElement(tip, el){
+  const rect = el.getBoundingClientRect();
+  tip.style.maxWidth = Math.min(420, window.innerWidth - 40) + 'px';
+  const margin = 8;
+  const tipW = tip.offsetWidth || Math.min(420, window.innerWidth - 40);
+  // compute top
+  let top = rect.top + rect.height/2 - tip.offsetHeight/2;
+  if (top < 8) top = 8;
+  if (top + tip.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - tip.offsetHeight);
+  // try place to the right
+  const rightX = rect.right + margin;
+  const leftX = rect.left - margin - tipW;
+  if (rightX + tipW < window.innerWidth - 8) {
+    tip.style.left = rightX + 'px';
+  } else if (leftX > 8) {
+    tip.style.left = leftX + 'px';
+  } else {
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - tipW - 8, rect.right + margin)) + 'px';
   }
+  tip.style.top = top + 'px';
 }
 
 /* sorting visuals */

@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
-  <!-- PapaParse (CSV parser) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <!-- SheetJS (XLSX) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
   <link rel="stylesheet" href="style.css" />
@@ -15,7 +13,7 @@
 <body>
   <header class="compact-header">
     <div class="header-left">
-      <img src="header-image.png" alt="Logo" class="header-image" />
+      <img src="assets/header-image.png" alt="Logo" class="header-image" />
       <div class="title-compact">
         <h1>Функциональная матрица</h1>
         <p class="subtitle-compact">Интерактивный просмотр ролей</p>
@@ -24,29 +22,30 @@
 
     <div class="header-right">
       <div class="controls-compact">
+        <!-- custom multiselect controls (JS replaces content) -->
         <div class="filter-compact">
-          <label for="filter-function">Функция</label>
-          <select id="filter-function"></select>
+          <label>Функция</label>
+          <div class="multiselect" id="filter-function" data-filter="function" data-placeholder="Все"></div>
         </div>
 
         <div class="filter-compact">
-          <label for="filter-department">Департамент</label>
-          <select id="filter-department"></select>
+          <label>Департамент</label>
+          <div class="multiselect" id="filter-department" data-filter="department" data-placeholder="Все"></div>
         </div>
 
         <div class="filter-compact">
-          <label for="filter-division">Отдел</label>
-          <select id="filter-division"></select>
+          <label>Отдел</label>
+          <div class="multiselect" id="filter-division" data-filter="division" data-placeholder="Все"></div>
         </div>
 
         <div class="filter-compact">
-          <label for="filter-position">Должность</label>
-          <select id="filter-position"></select>
+          <label>Должность</label>
+          <div class="multiselect" id="filter-position" data-filter="position" data-placeholder="Все"></div>
         </div>
 
         <div class="filter-compact">
-          <label for="filter-role">Роль</label>
-          <select id="filter-role"></select>
+          <label>Роль</label>
+          <div class="multiselect" id="filter-role" data-filter="role" data-placeholder="Все"></div>
         </div>
       </div>
 
@@ -62,7 +61,7 @@
 
     <div class="table-wrapper" id="table-wrapper">
       <table id="matrix" aria-describedby="info">
-        <!-- Статический colgroup. Ширины задаёт CSS через переменные в style.css -->
+        <!-- colgroup статичен: 7 колонок -->
         <colgroup>
           <col class="c1" />
           <col class="c2" />
@@ -71,14 +70,6 @@
           <col class="c5" />
           <col class="c6" />
           <col class="c7" />
-          <col class="c8" />
-          <col class="c9" />
-          <col class="c10" />
-          <col class="c11" />
-          <col class="c12" />
-          <col class="c13" />
-          <col class="c14" />
-          <col class="c15" />
         </colgroup>
 
         <thead>
@@ -90,14 +81,6 @@
             <th class="col-division">Отдел</th>
             <th class="col-position">Должность</th>
             <th class="col-role">Роль</th>
-            <th class="col-text-medium">Вход</th>
-            <th class="col-fromhow">От кого / как</th>
-            <th class="col-text-medium">Выход</th>
-            <th class="col-text-medium">Кому</th>
-            <th class="col-text-medium">Используемое ПО</th>
-            <th class="col-text-medium">Метрика</th>
-            <th class="col-text-medium">Как цифруем</th>
-            <th class="col-text-wide">Комментарий</th>
           </tr>
         </thead>
         <tbody></tbody>

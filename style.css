@@ -34,7 +34,7 @@ body{ margin:0; font-family:Inter, "Helvetica Neue", Arial, sans-serif; backgrou
 .filter-compact label{ font-size:11px; color:var(--muted); margin:0 }
 
 /* multiselect */
-.multiselect{ position:relative; border:1px solid var(--border); border-radius:8px; background:#fff; padding:6px 10px; cursor:pointer; min-height:36px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; max-width:260px; overflow:hidden; }
+.multiselect{ position:relative; border:1px solid var(--border); border-radius:8px; background:#fff; padding:6px 10px; min-height:36px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; max-width:260px; overflow:hidden; cursor:pointer; }
 .multiselect .chip{ background: rgba(107,78,255,0.08); color: var(--purple); padding:4px 8px; border-radius:16px; font-size:13px; display:inline-flex; align-items:center; gap:6px; }
 .multiselect .placeholder{ color:var(--muted); font-size:13px }
 
@@ -81,8 +81,8 @@ td.col-role{ text-align:center; vertical-align:top; padding-top:8px; padding-bot
 td.col-role .rolewrap{ display:flex; align-items:center; justify-content:center; height:100% }
 .role{ display:inline-block; padding:6px 8px; border-radius:6px; background: rgba(107,78,255,0.08); color:var(--purple); font-weight:700; cursor:default; position:relative }
 
-/* floating tooltip appended to body */
-.floating-tooltip{ position:fixed; display:block; background:#fff; border:1px solid var(--border); padding:10px 12px; border-radius:8px; box-shadow:0 12px 40px rgba(10,6,40,0.12); z-index:99999; max-width:360px; font-size:13px; color:#2b225a; line-height:1.35; }
+/* floating tooltip appended to body - now bold and more contrast */
+.floating-tooltip{ position:fixed; display:block; background:#fff; border:1px solid var(--border); padding:12px 14px; border-radius:8px; box-shadow:0 12px 40px rgba(10,6,40,0.14); z-index:99999; max-width:420px; font-size:14px; color:#2b225a; line-height:1.35; font-weight:700; }
 .floating-tooltip.hidden{ display:none; opacity:0; transform:translateY(6px); transition:opacity .14s, transform .14s; }
 .floating-tooltip.show{ display:block; opacity:1; transform:translateY(0); }
 

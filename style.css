@@ -5,7 +5,6 @@
   --muted: #666;
   --bg: #ffffff;
 
-  /* editable column widths (7 cols) */
   --w-c1: 4%;
   --w-c2: 28%;
   --w-c3: 12%;
@@ -15,7 +14,6 @@
   --w-c7: 8%;
 }
 
-/* basic & layout */
 html,body{ height:100% }
 *{ box-sizing:border-box }
 body{ margin:0; font-family:Inter, "Helvetica Neue", Arial, sans-serif; background:#fafafa; color:#222; display:flex; flex-direction:column }
@@ -29,22 +27,30 @@ body{ margin:0; font-family:Inter, "Helvetica Neue", Arial, sans-serif; backgrou
 .header-right{ display:flex; align-items:center; gap:12px }
 
 /* controls */
-.controls-compact{ display:flex; gap:8px; align-items:center; flex-wrap:nowrap }
-.filter-compact{ display:flex; flex-direction:column; gap:4px; min-width:140px; max-width:260px }
+.controls-compact{ display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap }
+.filter-compact{ display:flex; flex-direction:column; gap:6px; min-width:140px; max-width:260px }
 .filter-compact label{ font-size:11px; color:var(--muted); margin:0 }
 
-/* multiselect */
-.multiselect{ position:relative; border:1px solid var(--border); border-radius:8px; background:#fff; padding:6px 10px; min-height:36px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; max-width:260px; overflow:hidden; cursor:pointer; }
-.multiselect .chip{ background: rgba(107,78,255,0.08); color: var(--purple); padding:4px 8px; border-radius:16px; font-size:13px; display:inline-flex; align-items:center; gap:6px; }
-.multiselect .placeholder{ color:var(--muted); font-size:13px }
-
-/* dropdown panel fixed size so it won't expand to other monitor */
-.multiselect-panel{ position:absolute; top:calc(100% + 8px); left:0; width:320px; max-height:320px; overflow:auto; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 12px 40px rgba(10,6,40,.08); z-index:1500; padding:8px; }
-.multiselect-panel.hidden{ display:none; }
-.multiselect-panel .opt{ display:flex; gap:8px; align-items:center; padding:6px 6px; border-radius:6px; }
-.multiselect-panel .opt:hover{ background:#f6f2ff; }
-.panel-actions{ display:flex; justify-content:space-between; gap:8px; margin-bottom:6px; }
-.panel-actions button{ font-size:13px; padding:6px 8px; border-radius:6px; cursor:pointer; border:1px solid #e6e0fa; background:#fff }
+/* native multi selects styling */
+.native-multi{
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:6px 8px;
+  background:#fff;
+  min-height:36px;
+  font-size:13px;
+  width:100%;
+  box-sizing:border-box;
+  overflow:auto;
+  max-height:110px; /* prevents excessive height */
+  transition: box-shadow .12s, max-height .12s;
+}
+/* increase visible area on focus to ease selection */
+.native-multi:focus{
+  outline:none;
+  box-shadow:0 6px 20px rgba(107,78,255,0.12);
+  max-height:260px;
+}
 
 /* buttons */
 .actions-compact{ display:flex; gap:8px; align-items:center }
@@ -52,11 +58,12 @@ button{ font-family:inherit }
 .btn-light{ background:transparent; border:1px solid #ddd; padding:6px 10px; border-radius:6px; font-size:13px; cursor:pointer }
 .btn-primary{ background:var(--purple); color:#fff; border:none; padding:6px 10px; border-radius:6px; font-size:13px; cursor:pointer }
 
-/* main + table wrapper */
+/* main */
 .main-area{ flex:1 1 auto; display:flex; flex-direction:column; padding:10px 12px 10px; min-height:0 }
 .info{ padding:8px 10px; margin-bottom:8px; border-radius:8px; background:#fff6; color:#333; font-size:13px }
 .hidden{ display:none }
 
+/* table */
 .table-wrapper{ flex:1 1 auto; min-height:0; overflow:auto; background:var(--bg); border:1px solid var(--border); border-radius:8px }
 table{ width:100%; border-collapse:collapse; background:#fff; font-size:13px; table-layout:fixed }
 thead th{ position:sticky; top:0; z-index:10; background:var(--purple-soft); border-bottom:2px solid var(--border); padding:10px 12px; text-align:left; font-weight:600; white-space:nowrap; vertical-align:middle }
@@ -64,24 +71,24 @@ th, td{ padding:10px 12px; white-space:normal; word-break:normal; overflow-wrap:
 tbody td{ vertical-align:top }
 tbody tr:hover{ background:#fbf8ff }
 
-/* sorting arrow */
+/* sort arrow */
 .sort-arrow{ margin-left:6px; font-size:12px; color:var(--muted) }
 
 /* col widths */
-col.c1{ width:var(--w-c1) }  /* № */
-col.c2{ width:var(--w-c2) }  /* Функция */
-col.c3{ width:var(--w-c3) }  /* Продукт */
-col.c4{ width:var(--w-c4) }  /* Департамент */
-col.c5{ width:var(--w-c5) }  /* Отдел */
-col.c6{ width:var(--w-c6) }  /* Должность */
-col.c7{ width:var(--w-c7) }  /* Роль */
+col.c1{ width:var(--w-c1) }
+col.c2{ width:var(--w-c2) }
+col.c3{ width:var(--w-c3) }
+col.c4{ width:var(--w-c4) }
+col.c5{ width:var(--w-c5) }
+col.c6{ width:var(--w-c6) }
+col.c7{ width:var(--w-c7) }
 
-/* role wrapper (no ::after) */
+/* role & tooltip */
 td.col-role{ text-align:center; vertical-align:top; padding-top:8px; padding-bottom:8px }
 td.col-role .rolewrap{ display:flex; align-items:center; justify-content:center; height:100% }
 .role{ display:inline-block; padding:6px 8px; border-radius:6px; background: rgba(107,78,255,0.08); color:var(--purple); font-weight:700; cursor:default; position:relative }
 
-/* floating tooltip appended to body - now bold and more contrast */
+/* floating tooltip */
 .floating-tooltip{ position:fixed; display:block; background:#fff; border:1px solid var(--border); padding:12px 14px; border-radius:8px; box-shadow:0 12px 40px rgba(10,6,40,0.14); z-index:99999; max-width:420px; font-size:14px; color:#2b225a; line-height:1.35; font-weight:700; }
 .floating-tooltip.hidden{ display:none; opacity:0; transform:translateY(6px); transition:opacity .14s, transform .14s; }
 .floating-tooltip.show{ display:block; opacity:1; transform:translateY(0); }
@@ -92,7 +99,6 @@ td.col-role .rolewrap{ display:flex; align-items:center; justify-content:center;
 
 /* responsive */
 @media (max-width:900px){
-  .filter-compact{ min-width:110px }
-  .multiselect{ max-width:200px }
-  .multiselect-panel{ width:260px }
+  .controls-compact{ flex-wrap:wrap }
+  .filter-compact{ min-width:110px; max-width:200px }
 }

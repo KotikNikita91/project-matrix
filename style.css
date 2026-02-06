@@ -28,7 +28,15 @@ body{ margin:0; font-family:Inter, "Helvetica Neue", Arial, sans-serif; backgrou
 .header-right{ display:flex; align-items:center; gap:12px }
 
 /* controls */
-.controls-compact{ display:flex; gap:8px; align-items:flex-start; flex-wrap:nowrap; min-width:0; overflow:hidden }
+.controls-compact{
+  display:flex;
+  gap:8px;
+  align-items:flex-start;
+  flex-wrap:nowrap;
+  min-width:0;
+  /* было: overflow:hidden;  <- обрезает выпадашки */
+  overflow: visible; /* теперь выпадашка не будет обрезаться */
+}
 .filter-compact{ display:flex; flex-direction:column; gap:6px; min-width:140px; max-width:240px }
 
 /* label */

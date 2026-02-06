@@ -1,14 +1,13 @@
-/* app.js — устойчивая версия
-   - стабильное открытие/закрытие multiselect (pointerdown capture)
-   - floating tooltip (жирный)
-   - сортировка, экспорт, каскад фильтров
-   - сохраняет фильтры в localStorage
+/* app.js — упрощённая, надёжная версия управления multiselect'ами
+   - каждый multiselect управляет своей панелью через click на display
+   - клик внутри панели не закрывает её
+   - клик по документу закрывает все панели
+   - сохраняет всё остальное: загрузка CSV, каскад, тултип, сортировка, экспорт
 */
 
 const DATA_URL = 'data.csv';
-const STORAGE_FILTERS = 'matrix_filters_v3';
+const STORAGE_FILTERS = 'matrix_filters_v4'; // bumped version
 
-/* role descriptions */
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции. Назначает исполнителей, контролирует сроки и качество.',
   'В': 'Выполняющий: непосредственно выполняет работу по поручению ответственного.',
@@ -43,13 +42,11 @@ let headerMap = {};
 let sortState = { key: null, dir: 1 }; // dir: 1 asc, -1 desc
 
 document.addEventListener('DOMContentLoaded', () => {
-  // basic buttons
   const clearBtn = document.getElementById('clear');
   const exportBtn = document.getElementById('export');
   if (clearBtn) clearBtn.addEventListener('click', onClearClick);
   if (exportBtn) exportBtn.addEventListener('click', onExportClick);
 
-  // header sorting handlers
   document.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
@@ -61,7 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // floating tooltip element
+  // single floating tooltip element
   if (!document.getElementById('floating-tooltip')) {
     const tip = document.createElement('div');
     tip.id = 'floating-tooltip';
@@ -69,56 +66,32 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(tip);
   }
 
-  // Pointerdown capture listener for robust multiselect open/close
-  document.addEventListener('pointerdown', globalPointerDownHandler, true);
+  // close panels on any document click (unless click handled inside)
+  document.addEventListener('click', (e) => {
+    // if click is inside some multiselect container or its panel, do nothing (those handlers run earlier)
+    // but simplest: always close all panels on document click; multiselect display/panel handlers will stopPropagation when needed
+    closeAllMultiselectPanels();
+  });
 
   loadCSV();
 });
 
-/* -------------------- global pointerdown handler (capturing) --------------------
-   Logic:
-   - If pointerdown happened inside a .multiselect.display area => toggle that panel (open)
-   - If pointerdown happened inside an open panel (inside .multiselect-panel) => do nothing (allow clicks)
-   - Otherwise close all panels
-*/
-function globalPointerDownHandler(e){
-  // find the nearest .multiselect container from event target (walk up)
-  const msEl = e.target.closest && e.target.closest('.multiselect');
-  if (!msEl) {
-    // click outside any multiselect: close all panels
-    closeAllMultiselectPanels();
-    return;
-  }
+/* -------------------- multiselect helpers (simple, robust) -------------------- */
 
-  // If clicked inside a panel, do nothing (let inner handlers work)
-  const panel = msEl.querySelector('.multiselect-panel');
-  if (panel && panel.contains(e.target)) {
-    // click inside panel: keep it open
-    return;
-  }
-
-  // If clicked inside the display area (or container) toggle panel
-  // We'll consider clicks on any child of msEl that is not within the panel.
-  toggleMultiselectPanel(msEl);
-  // stop propagation to avoid other handlers interfering
-  e.stopPropagation();
-}
-
-/* Close all panels */
 function closeAllMultiselectPanels(){
   document.querySelectorAll('.multiselect-panel').forEach(p => p.classList.add('hidden'));
 }
 
-/* Toggle panel for a given container (.multiselect) */
-function toggleMultiselectPanel(container){
+function toggleMultiselectPanelByContainer(container){
   const panel = container.querySelector('.multiselect-panel');
   if (!panel) return;
-  // close other panels first
+  // close others
   document.querySelectorAll('.multiselect-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
   panel.classList.toggle('hidden');
 }
 
-/* -------------------- CSV load / normalization -------------------- */
+/* -------------------- CSV load / normalize -------------------- */
+
 function loadCSV(){
   showInfo('Загрузка данных...');
   fetch(DATA_URL)
@@ -175,7 +148,8 @@ function buildHeaderMap(headers){
   });
 }
 
-/* -------------------- multiselects -------------------- */
+/* -------------------- multiselect build / behavior -------------------- */
+
 function buildAllMultiselects(){
   FILTER_CONFIG.forEach(cfg => buildMultiselect(cfg.id));
 }
@@ -186,25 +160,18 @@ function buildMultiselect(containerId){
   container.innerHTML = '';
   container.classList.add('multiselect');
 
-  // display (clicking anywhere inside container will be handled by global pointerdown)
+  // display area
   const display = document.createElement('div');
   display.className = 'display';
-  display.tabIndex = 0; // focusable
+  display.tabIndex = 0; // keyboard focusable
   container.appendChild(display);
-
-  // chevron at end (display content rendered later)
-  const chevron = document.createElement('div');
-  chevron.style.marginLeft = 'auto';
-  chevron.style.opacity = '0.6';
-  chevron.innerHTML = '&#9662;';
-  // chevron appended in renderMultiselectDisplay
 
   // panel
   const panel = document.createElement('div');
   panel.className = 'multiselect-panel hidden';
   container.appendChild(panel);
 
-  // panel header with actions
+  // actions in panel
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
   const selectAllBtn = document.createElement('button'); selectAllBtn.type='button'; selectAllBtn.textContent='Выбрать всё';
@@ -218,6 +185,17 @@ function buildMultiselect(containerId){
 
   // populate options
   refreshMultiselectOptions(containerId);
+
+  // Click on display toggles panel. Stop propagation to prevent document click from immediately closing it.
+  display.addEventListener('click', function(e){
+    e.stopPropagation();
+    toggleMultiselectPanelByContainer(container);
+  });
+
+  // clicking inside panel should not bubble to document (so it won't close)
+  panel.addEventListener('click', function(e){
+    e.stopPropagation();
+  });
 
   // actions
   selectAllBtn.addEventListener('click', (e) => {
@@ -235,12 +213,12 @@ function buildMultiselect(containerId){
   display.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      toggleMultiselectPanel(container);
+      toggleMultiselectPanelByContainer(container);
     }
   });
 }
 
-/* refresh options for multiselect from current dataset (allowedValues optional) */
+/* Rebuild options for one multiselect; allowedValues optional */
 function refreshMultiselectOptions(containerId, allowedValues=null){
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -302,16 +280,17 @@ function renderMultiselectDisplay(id){
     ph.textContent = container.dataset.placeholder || 'Все';
     display.appendChild(ph);
   } else if (vals.length <= 3){
-    vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); });
+    vals.forEach(v => {
+      const chip = document.createElement('div'); chip.className = 'chip'; chip.textContent = v; display.appendChild(chip);
+    });
   } else {
-    const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
+    const chip = document.createElement('div'); chip.className = 'chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
   }
-  // chevron
   const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;';
   display.appendChild(chevron);
 }
 
-/* on change */
+/* When selections change */
 function onMultiselectChange(containerId){
   renderMultiselectDisplay(containerId);
   saveFiltersToStorage();
@@ -364,7 +343,6 @@ function restoreFiltersFromStorage(){
   }
 }
 
-/* clear */
 function onClearClick(){
   FILTER_CONFIG.forEach(cfg => { refreshMultiselectOptions(cfg.id); setMultiselectValues(cfg.id, []); });
   localStorage.removeItem(STORAGE_FILTERS);
@@ -372,7 +350,8 @@ function onClearClick(){
   showToast('Фильтры сброшены', 900);
 }
 
-/* -------------------- render table (with sort) -------------------- */
+/* -------------------- render table + sorting -------------------- */
+
 function renderTable(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
@@ -393,8 +372,7 @@ function renderTable(){
 
   // sorting
   if (sortState.key) {
-    const mapKey = sortState.key;
-    const candidates = LOGICAL_FIELDS[mapKey] || LOGICAL_FIELDS['func'];
+    const candidates = LOGICAL_FIELDS[sortState.key] || LOGICAL_FIELDS['func'];
     rows.sort((a,b) => {
       const va = (getFieldValue(a, candidates)||'').toString().toLowerCase();
       const vb = (getFieldValue(b, candidates)||'').toString().toLowerCase();
@@ -408,7 +386,7 @@ function renderTable(){
 
   if (!rows.length){
     tbody.innerHTML = `<tr><td colspan="7" style="padding:18px 12px; color:#666">Нет данных по выбранным фильтрам</td></tr>`;
-    attachRoleTooltips(); // reset tooltips
+    attachRoleTooltips();
     return;
   }
 
@@ -436,13 +414,13 @@ function renderTable(){
   attachRoleTooltips();
 }
 
-/* helper */
 function getFieldValue(row, candidates){
   for (let k of candidates) if (row[k] !== undefined) return row[k];
   return '';
 }
 
-/* -------------------- role tooltip (floating, not affecting layout) -------------------- */
+/* -------------------- floating tooltip (doesn't affect layout) -------------------- */
+
 function attachRoleTooltips(){
   const tip = document.getElementById('floating-tooltip');
   if (!tip) return;
@@ -451,7 +429,7 @@ function attachRoleTooltips(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
-  // replace tbody node to remove old listeners safely
+  // replace old tbody to clear listeners
   const newTbody = tbody.cloneNode(true);
   tbody.parentNode.replaceChild(newTbody, tbody);
 
@@ -482,8 +460,7 @@ function positionTooltipNearElement(tip, el){
   const rect = el.getBoundingClientRect();
   tip.style.maxWidth = Math.min(420, window.innerWidth - 40) + 'px';
   const margin = 8;
-  // compute top (vertical centering)
-  let top = rect.top + rect.height/2 - tip.offsetHeight/2;
+  let top = rect.top + rect.height/2 - (tip.offsetHeight/2 || 30);
   if (top < 8) top = 8;
   if (top + tip.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - tip.offsetHeight);
   const tipW = tip.offsetWidth || Math.min(420, window.innerWidth - 40);
@@ -496,6 +473,7 @@ function positionTooltipNearElement(tip, el){
 }
 
 /* -------------------- sorting visuals -------------------- */
+
 function updateSortIndicators(){
   document.querySelectorAll('th.sortable').forEach(th => {
     const arrow = th.querySelector('.sort-arrow');
@@ -506,6 +484,7 @@ function updateSortIndicators(){
 }
 
 /* -------------------- export -------------------- */
+
 function onExportClick(){
   if (!lastRenderedRows || !lastRenderedRows.length){ showToast('Нет данных для экспорта', 1200); return; }
   const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль"];
@@ -533,7 +512,8 @@ function onExportClick(){
   showToast('Экспорт завершён: ' + fn, 1500);
 }
 
-/* -------------------- small UI helpers -------------------- */
+/* -------------------- tiny UI helpers -------------------- */
+
 function showInfo(msg, important=false){
   const el = document.getElementById('info');
   if (!el) return;

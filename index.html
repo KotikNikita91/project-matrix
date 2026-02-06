@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
-  <!-- PapaParse + SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
@@ -24,28 +23,28 @@
     <div class="header-right">
       <div class="controls-compact">
         <div class="filter-compact">
-          <label>Функция</label>
-          <div class="multiselect" id="filter-function" data-filter="function" data-placeholder="Все"></div>
+          <label for="filter-function">Функция</label>
+          <select id="filter-function" multiple size="4" class="native-multi"></select>
         </div>
 
         <div class="filter-compact">
-          <label>Департамент</label>
-          <div class="multiselect" id="filter-department" data-filter="department" data-placeholder="Все"></div>
+          <label for="filter-department">Департамент</label>
+          <select id="filter-department" multiple size="4" class="native-multi"></select>
         </div>
 
         <div class="filter-compact">
-          <label>Отдел</label>
-          <div class="multiselect" id="filter-division" data-filter="division" data-placeholder="Все"></div>
+          <label for="filter-division">Отдел</label>
+          <select id="filter-division" multiple size="4" class="native-multi"></select>
         </div>
 
         <div class="filter-compact">
-          <label>Должность</label>
-          <div class="multiselect" id="filter-position" data-filter="position" data-placeholder="Все"></div>
+          <label for="filter-position">Должность</label>
+          <select id="filter-position" multiple size="4" class="native-multi"></select>
         </div>
 
         <div class="filter-compact">
-          <label>Роль</label>
-          <div class="multiselect" id="filter-role" data-filter="role" data-placeholder="Все"></div>
+          <label for="filter-role">Роль</label>
+          <select id="filter-role" multiple size="4" class="native-multi"></select>
         </div>
       </div>
 
@@ -70,7 +69,6 @@
           <col class="c6" />
           <col class="c7" />
         </colgroup>
-
         <thead>
           <tr>
             <th data-key="num" class="col-id sortable">№ <span class="sort-arrow"></span></th>
@@ -87,10 +85,7 @@
     </div>
   </main>
 
-  <!-- single floating tooltip (appends to body) -->
   <div id="floating-tooltip" class="floating-tooltip hidden" role="tooltip"></div>
-
-  <!-- toast -->
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>

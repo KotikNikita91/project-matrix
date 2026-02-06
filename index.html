@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Функциональная матрица</title>
 
+  <!-- библиотеки -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
@@ -21,31 +22,13 @@
     </div>
 
     <div class="header-right">
-      <div class="controls-compact">
-        <div class="filter-compact">
-          <label for="filter-function">Функция</label>
-          <select id="filter-function" multiple size="4" class="native-multi"></select>
-        </div>
-
-        <div class="filter-compact">
-          <label for="filter-department">Департамент</label>
-          <select id="filter-department" multiple size="4" class="native-multi"></select>
-        </div>
-
-        <div class="filter-compact">
-          <label for="filter-division">Отдел</label>
-          <select id="filter-division" multiple size="4" class="native-multi"></select>
-        </div>
-
-        <div class="filter-compact">
-          <label for="filter-position">Должность</label>
-          <select id="filter-position" multiple size="4" class="native-multi"></select>
-        </div>
-
-        <div class="filter-compact">
-          <label for="filter-role">Роль</label>
-          <select id="filter-role" multiple size="4" class="native-multi"></select>
-        </div>
+      <div class="controls-compact" id="controls-compact">
+        <!-- placeholders: будут заменены JS при инициализации -->
+        <div class="filter-compact" data-filter-id="filter-function"></div>
+        <div class="filter-compact" data-filter-id="filter-department"></div>
+        <div class="filter-compact" data-filter-id="filter-division"></div>
+        <div class="filter-compact" data-filter-id="filter-position"></div>
+        <div class="filter-compact" data-filter-id="filter-role"></div>
       </div>
 
       <div class="actions-compact">
@@ -69,6 +52,7 @@
           <col class="c6" />
           <col class="c7" />
         </colgroup>
+
         <thead>
           <tr>
             <th data-key="num" class="col-id sortable">№ <span class="sort-arrow"></span></th>

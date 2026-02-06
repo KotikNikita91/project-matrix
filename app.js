@@ -1,12 +1,13 @@
-/* app.js — упрощённая, надёжная версия управления multiselect'ами
-   - каждый multiselect управляет своей панелью через click на display
+/* app.js — исправленная стабильная версия (заменить целиком)
+   - pointerdown на display с stopImmediatePropagation -> гарантированное открытие
    - клик внутри панели не закрывает её
-   - клик по документу закрывает все панели
-   - сохраняет всё остальное: загрузка CSV, каскад, тултип, сортировка, экспорт
+   - клик вне закрывает все панели
+   - сортировка, экспорт, каскад остались
+   - bumped storage key v5
 */
 
 const DATA_URL = 'data.csv';
-const STORAGE_FILTERS = 'matrix_filters_v4'; // bumped version
+const STORAGE_FILTERS = 'matrix_filters_v5';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции. Назначает исполнителей, контролирует сроки и качество.',
@@ -47,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (clearBtn) clearBtn.addEventListener('click', onClearClick);
   if (exportBtn) exportBtn.addEventListener('click', onExportClick);
 
+  // sort handlers
   document.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
@@ -58,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // single floating tooltip element
+  // floating tooltip container
   if (!document.getElementById('floating-tooltip')) {
     const tip = document.createElement('div');
     tip.id = 'floating-tooltip';
@@ -66,32 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(tip);
   }
 
-  // close panels on any document click (unless click handled inside)
-  document.addEventListener('click', (e) => {
-    // if click is inside some multiselect container or its panel, do nothing (those handlers run earlier)
-    // but simplest: always close all panels on document click; multiselect display/panel handlers will stopPropagation when needed
-    closeAllMultiselectPanels();
-  });
+  // global click: close panels when clicking outside (panels/display handlers stop propagation or stop immediate propagation)
+  document.addEventListener('click', () => closeAllMultiselectPanels());
 
   loadCSV();
 });
 
-/* -------------------- multiselect helpers (simple, robust) -------------------- */
-
-function closeAllMultiselectPanels(){
-  document.querySelectorAll('.multiselect-panel').forEach(p => p.classList.add('hidden'));
-}
-
-function toggleMultiselectPanelByContainer(container){
-  const panel = container.querySelector('.multiselect-panel');
-  if (!panel) return;
-  // close others
-  document.querySelectorAll('.multiselect-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
-  panel.classList.toggle('hidden');
-}
-
-/* -------------------- CSV load / normalize -------------------- */
-
+/* ---------------------- CSV load & normalize ---------------------- */
 function loadCSV(){
   showInfo('Загрузка данных...');
   fetch(DATA_URL)
@@ -107,7 +90,10 @@ function loadCSV(){
       hideInfo();
       showToast('Данные загружены', 900);
     })
-    .catch(err => { console.error(err); showInfo('Ошибка при загрузке данных: ' + err.message, true); });
+    .catch(err => {
+      console.error(err);
+      showInfo('Ошибка при загрузке данных: ' + err.message, true);
+    });
 }
 
 function normalizeRow(row){
@@ -120,7 +106,7 @@ function normalizeRow(row){
   return out;
 }
 
-/* -------------------- header mapping -------------------- */
+/* ---------------------- header mapping ---------------------- */
 function findHeaderByCandidates(headers, candidates){
   const lowered = headers.map(h => h.toLowerCase().replace(/\s+/g,''));
   for (let cand of candidates){
@@ -148,7 +134,7 @@ function buildHeaderMap(headers){
   });
 }
 
-/* -------------------- multiselect build / behavior -------------------- */
+/* ---------------------- multiselects (robust) ---------------------- */
 
 function buildAllMultiselects(){
   FILTER_CONFIG.forEach(cfg => buildMultiselect(cfg.id));
@@ -160,10 +146,10 @@ function buildMultiselect(containerId){
   container.innerHTML = '';
   container.classList.add('multiselect');
 
-  // display area
+  // display block
   const display = document.createElement('div');
   display.className = 'display';
-  display.tabIndex = 0; // keyboard focusable
+  display.tabIndex = 0;
   container.appendChild(display);
 
   // panel
@@ -171,7 +157,7 @@ function buildMultiselect(containerId){
   panel.className = 'multiselect-panel hidden';
   container.appendChild(panel);
 
-  // actions in panel
+  // panel actions
   const actions = document.createElement('div');
   actions.className = 'panel-actions';
   const selectAllBtn = document.createElement('button'); selectAllBtn.type='button'; selectAllBtn.textContent='Выбрать всё';
@@ -183,21 +169,25 @@ function buildMultiselect(containerId){
   list.className = 'options';
   panel.appendChild(list);
 
-  // populate options
+  // fill options
   refreshMultiselectOptions(containerId);
 
-  // Click on display toggles panel. Stop propagation to prevent document click from immediately closing it.
-  display.addEventListener('click', function(e){
-    e.stopPropagation();
-    toggleMultiselectPanelByContainer(container);
+  // KEY FIX: use pointerdown on display and stopImmediatePropagation
+  // this prevents any document-level click from closing the panel immediately
+  display.addEventListener('pointerdown', function(e){
+    // Prevent other click handlers (including document click) from running after this
+    e.preventDefault && e.preventDefault();
+    e.stopImmediatePropagation && e.stopImmediatePropagation();
+    // toggle panel
+    toggleMultiselectPanelFor(container);
   });
 
-  // clicking inside panel should not bubble to document (so it won't close)
+  // ensure clicks inside panel don't bubble and close it
   panel.addEventListener('click', function(e){
     e.stopPropagation();
   });
 
-  // actions
+  // panel actions
   selectAllBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     Array.from(list.querySelectorAll('input[type=checkbox]')).forEach(i => i.checked = true);
@@ -210,15 +200,29 @@ function buildMultiselect(containerId){
   });
 
   // keyboard support
-  display.addEventListener('keydown', (e) => {
+  display.addEventListener('keydown', function(e){
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      toggleMultiselectPanelByContainer(container);
+      e.stopImmediatePropagation && e.stopImmediatePropagation();
+      toggleMultiselectPanelFor(container);
     }
   });
 }
 
-/* Rebuild options for one multiselect; allowedValues optional */
+// toggle helper
+function toggleMultiselectPanelFor(container){
+  const panel = container.querySelector('.multiselect-panel');
+  if (!panel) return;
+  // close other panels first
+  document.querySelectorAll('.multiselect-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
+  panel.classList.toggle('hidden');
+}
+
+function closeAllMultiselectPanels(){
+  document.querySelectorAll('.multiselect-panel').forEach(p => p.classList.add('hidden'));
+}
+
+/* build options */
 function refreshMultiselectOptions(containerId, allowedValues=null){
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -253,20 +257,8 @@ function refreshMultiselectOptions(containerId, allowedValues=null){
 }
 
 function hashString(s){ let h=0; for (let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i); return (h>>>0).toString(36); }
-
-function getMultiselectValues(id){
-  const container = document.getElementById(id);
-  if (!container) return [];
-  return Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value);
-}
-
-function setMultiselectValues(id, values){
-  const container = document.getElementById(id);
-  if (!container) return;
-  const inputs = Array.from(container.querySelectorAll('input[type=checkbox]'));
-  inputs.forEach(i => i.checked = values.includes(i.value));
-  renderMultiselectDisplay(id);
-}
+function getMultiselectValues(id){ const container = document.getElementById(id); if (!container) return []; return Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value); }
+function setMultiselectValues(id, values){ const container = document.getElementById(id); if (!container) return; const inputs = Array.from(container.querySelectorAll('input[type=checkbox]')); inputs.forEach(i => i.checked = values.includes(i.value)); renderMultiselectDisplay(id); }
 
 function renderMultiselectDisplay(id){
   const container = document.getElementById(id);
@@ -275,22 +267,17 @@ function renderMultiselectDisplay(id){
   display.innerHTML = '';
   const vals = getMultiselectValues(id);
   if (!vals.length){
-    const ph = document.createElement('div');
-    ph.className = 'placeholder';
-    ph.textContent = container.dataset.placeholder || 'Все';
-    display.appendChild(ph);
+    const ph = document.createElement('div'); ph.className = 'placeholder'; ph.textContent = container.dataset.placeholder || 'Все'; display.appendChild(ph);
   } else if (vals.length <= 3){
-    vals.forEach(v => {
-      const chip = document.createElement('div'); chip.className = 'chip'; chip.textContent = v; display.appendChild(chip);
-    });
+    vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); });
   } else {
-    const chip = document.createElement('div'); chip.className = 'chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
+    const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
   }
   const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;';
   display.appendChild(chevron);
 }
 
-/* When selections change */
+/* on change */
 function onMultiselectChange(containerId){
   renderMultiselectDisplay(containerId);
   saveFiltersToStorage();
@@ -298,7 +285,7 @@ function onMultiselectChange(containerId){
   renderTable();
 }
 
-/* cascade filters */
+/* cascade */
 function cascadeFilters(){
   FILTER_CONFIG.forEach(cfg => {
     const containerId = cfg.id;
@@ -350,17 +337,13 @@ function onClearClick(){
   showToast('Фильтры сброшены', 900);
 }
 
-/* -------------------- render table + sorting -------------------- */
-
+/* ---------------------- table render + sorting ---------------------- */
 function renderTable(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
   const active = {};
-  FILTER_CONFIG.forEach(cfg => {
-    const hdr = document.getElementById(cfg.id).dataset.csvHeader;
-    active[hdr] = getMultiselectValues(cfg.id);
-  });
+  FILTER_CONFIG.forEach(cfg => { const hdr = document.getElementById(cfg.id).dataset.csvHeader; active[hdr] = getMultiselectValues(cfg.id); });
 
   let rows = rawRows.filter(row => {
     return Object.entries(active).every(([hdr, vals]) => {
@@ -370,7 +353,6 @@ function renderTable(){
     });
   });
 
-  // sorting
   if (sortState.key) {
     const candidates = LOGICAL_FIELDS[sortState.key] || LOGICAL_FIELDS['func'];
     rows.sort((a,b) => {
@@ -419,8 +401,7 @@ function getFieldValue(row, candidates){
   return '';
 }
 
-/* -------------------- floating tooltip (doesn't affect layout) -------------------- */
-
+/* ---------------------- role tooltip (floating) ---------------------- */
 function attachRoleTooltips(){
   const tip = document.getElementById('floating-tooltip');
   if (!tip) return;
@@ -429,7 +410,7 @@ function attachRoleTooltips(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
-  // replace old tbody to clear listeners
+  // fresh tbody to prevent duplicate listeners
   const newTbody = tbody.cloneNode(true);
   tbody.parentNode.replaceChild(newTbody, tbody);
 
@@ -460,7 +441,7 @@ function positionTooltipNearElement(tip, el){
   const rect = el.getBoundingClientRect();
   tip.style.maxWidth = Math.min(420, window.innerWidth - 40) + 'px';
   const margin = 8;
-  let top = rect.top + rect.height/2 - (tip.offsetHeight/2 || 30);
+  let top = rect.top + rect.height/2 - (tip.offsetHeight/2 || 20);
   if (top < 8) top = 8;
   if (top + tip.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - tip.offsetHeight);
   const tipW = tip.offsetWidth || Math.min(420, window.innerWidth - 40);
@@ -472,8 +453,7 @@ function positionTooltipNearElement(tip, el){
   tip.style.top = top + 'px';
 }
 
-/* -------------------- sorting visuals -------------------- */
-
+/* ---------------------- sorting visuals ---------------------- */
 function updateSortIndicators(){
   document.querySelectorAll('th.sortable').forEach(th => {
     const arrow = th.querySelector('.sort-arrow');
@@ -483,8 +463,7 @@ function updateSortIndicators(){
   });
 }
 
-/* -------------------- export -------------------- */
-
+/* ---------------------- export ---------------------- */
 function onExportClick(){
   if (!lastRenderedRows || !lastRenderedRows.length){ showToast('Нет данных для экспорта', 1200); return; }
   const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль"];
@@ -512,7 +491,7 @@ function onExportClick(){
   showToast('Экспорт завершён: ' + fn, 1500);
 }
 
-/* -------------------- tiny UI helpers -------------------- */
+/* ---------------------- tiny UI helpers ---------------------- */
 
 function showInfo(msg, important=false){
   const el = document.getElementById('info');

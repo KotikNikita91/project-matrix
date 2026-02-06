@@ -1,4 +1,9 @@
-/* app.js — исправлены: multiselect toggle надежно работает; тултип плавающий с жирным шрифтом; сортировка/экспорт/фильтры сохранены */
+/* app.js — устойчивая версия
+   - стабильное открытие/закрытие multiselect (pointerdown capture)
+   - floating tooltip (жирный)
+   - сортировка, экспорт, каскад фильтров
+   - сохраняет фильтры в localStorage
+*/
 
 const DATA_URL = 'data.csv';
 const STORAGE_FILTERS = 'matrix_filters_v3';
@@ -38,21 +43,25 @@ let headerMap = {};
 let sortState = { key: null, dir: 1 }; // dir: 1 asc, -1 desc
 
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('clear').addEventListener('click', onClearClick);
-  document.getElementById('export').addEventListener('click', onExportClick);
+  // basic buttons
+  const clearBtn = document.getElementById('clear');
+  const exportBtn = document.getElementById('export');
+  if (clearBtn) clearBtn.addEventListener('click', onClearClick);
+  if (exportBtn) exportBtn.addEventListener('click', onExportClick);
 
-  // attach header sorting handlers
+  // header sorting handlers
   document.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
       if (!key) return;
-      if (sortState.key === key) sortState.dir = -sortState.dir; else { sortState.key = key; sortState.dir = 1; }
+      if (sortState.key === key) sortState.dir = -sortState.dir;
+      else { sortState.key = key; sortState.dir = 1; }
       updateSortIndicators();
       renderTable();
     });
   });
 
-  // ensure single floating tooltip element exists
+  // floating tooltip element
   if (!document.getElementById('floating-tooltip')) {
     const tip = document.createElement('div');
     tip.id = 'floating-tooltip';
@@ -60,32 +69,56 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(tip);
   }
 
-  // global click handler: close any open panels when clicking outside
-  document.addEventListener('click', (e) => {
-    document.querySelectorAll('.multiselect-panel').forEach(panel => {
-      const parent = panel.parentElement;
-      if (!parent) return;
-      if (!parent.contains(e.target)) panel.classList.add('hidden');
-    });
-  });
+  // Pointerdown capture listener for robust multiselect open/close
+  document.addEventListener('pointerdown', globalPointerDownHandler, true);
 
   loadCSV();
 });
 
-/* UI helpers */
-function showInfo(msg, important=false){
-  const el = document.getElementById('info');
-  if (!el) return;
-  el.classList.remove('hidden');
-  el.textContent = msg;
-  el.style.border = important ? '1px solid #ffdede' : 'none';
-}
-function hideInfo(){ const el = document.getElementById('info'); if (!el) return; el.classList.add('hidden'); el.textContent=''; el.style.border='none'; }
-function showToast(msg, ms=1200){ const t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.remove('hidden'); clearTimeout(t._to); t._to = setTimeout(()=> t.classList.add('hidden'), ms); }
-function escapeHtml(s){ if (s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
-function escapeHtmlAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }
+/* -------------------- global pointerdown handler (capturing) --------------------
+   Logic:
+   - If pointerdown happened inside a .multiselect.display area => toggle that panel (open)
+   - If pointerdown happened inside an open panel (inside .multiselect-panel) => do nothing (allow clicks)
+   - Otherwise close all panels
+*/
+function globalPointerDownHandler(e){
+  // find the nearest .multiselect container from event target (walk up)
+  const msEl = e.target.closest && e.target.closest('.multiselect');
+  if (!msEl) {
+    // click outside any multiselect: close all panels
+    closeAllMultiselectPanels();
+    return;
+  }
 
-/* CSV load */
+  // If clicked inside a panel, do nothing (let inner handlers work)
+  const panel = msEl.querySelector('.multiselect-panel');
+  if (panel && panel.contains(e.target)) {
+    // click inside panel: keep it open
+    return;
+  }
+
+  // If clicked inside the display area (or container) toggle panel
+  // We'll consider clicks on any child of msEl that is not within the panel.
+  toggleMultiselectPanel(msEl);
+  // stop propagation to avoid other handlers interfering
+  e.stopPropagation();
+}
+
+/* Close all panels */
+function closeAllMultiselectPanels(){
+  document.querySelectorAll('.multiselect-panel').forEach(p => p.classList.add('hidden'));
+}
+
+/* Toggle panel for a given container (.multiselect) */
+function toggleMultiselectPanel(container){
+  const panel = container.querySelector('.multiselect-panel');
+  if (!panel) return;
+  // close other panels first
+  document.querySelectorAll('.multiselect-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
+  panel.classList.toggle('hidden');
+}
+
+/* -------------------- CSV load / normalization -------------------- */
 function loadCSV(){
   showInfo('Загрузка данных...');
   fetch(DATA_URL)
@@ -103,18 +136,38 @@ function loadCSV(){
     })
     .catch(err => { console.error(err); showInfo('Ошибка при загрузке данных: ' + err.message, true); });
 }
-function normalizeRow(row){ const out={}; Object.keys(row).forEach(k=>{ const key=String(k).replace(/^\uFEFF/,'').trim(); const val = row[k]==null ? '' : String(row[k]).replace(/\r/g,'').trim(); out[key]=val; }); return out; }
 
-/* header mapping */
+function normalizeRow(row){
+  const out = {};
+  Object.keys(row).forEach(k => {
+    const key = String(k).replace(/^\uFEFF/, '').trim();
+    const val = row[k] == null ? '' : String(row[k]).replace(/\r/g,'').trim();
+    out[key] = val;
+  });
+  return out;
+}
+
+/* -------------------- header mapping -------------------- */
 function findHeaderByCandidates(headers, candidates){
-  const lowered = headers.map(h=>h.toLowerCase().replace(/\s+/g,''));
-  for (let cand of candidates){ const key = cand.toLowerCase().replace(/\s+/g,''); const idx = lowered.indexOf(key); if (idx !== -1) return headers[idx]; }
-  for (let cand of candidates){ for (let h of headers){ if (h.toLowerCase().includes(cand.toLowerCase().replace(/\s+/g,''))) return h; } }
+  const lowered = headers.map(h => h.toLowerCase().replace(/\s+/g,''));
+  for (let cand of candidates){
+    const key = cand.toLowerCase().replace(/\s+/g,'');
+    const idx = lowered.indexOf(key);
+    if (idx !== -1) return headers[idx];
+  }
+  for (let cand of candidates){
+    for (let h of headers){
+      if (h.toLowerCase().includes(cand.toLowerCase().replace(/\s+/g,''))) return h;
+    }
+  }
   return null;
 }
+
 function buildHeaderMap(headers){
-  headerMap={};
-  Object.entries(LOGICAL_FIELDS).forEach(([k,cands]) => headerMap[k]=findHeaderByCandidates(headers,cands)||headers[0]||'');
+  headerMap = {};
+  Object.entries(LOGICAL_FIELDS).forEach(([k,cands]) => {
+    headerMap[k] = findHeaderByCandidates(headers, cands) || headers[0] || '';
+  });
   FILTER_CONFIG.forEach(f => {
     const found = findHeaderByCandidates(headers, f.keyCandidates);
     const el = document.getElementById(f.id);
@@ -122,8 +175,10 @@ function buildHeaderMap(headers){
   });
 }
 
-/* multiselects */
-function buildAllMultiselects(){ FILTER_CONFIG.forEach(cfg => buildMultiselect(cfg.id)); }
+/* -------------------- multiselects -------------------- */
+function buildAllMultiselects(){
+  FILTER_CONFIG.forEach(cfg => buildMultiselect(cfg.id));
+}
 
 function buildMultiselect(containerId){
   const container = document.getElementById(containerId);
@@ -131,46 +186,61 @@ function buildMultiselect(containerId){
   container.innerHTML = '';
   container.classList.add('multiselect');
 
-  const display = document.createElement('div'); display.className='display';
-  // ensure display is focusable for keyboard later
-  display.tabIndex = 0;
+  // display (clicking anywhere inside container will be handled by global pointerdown)
+  const display = document.createElement('div');
+  display.className = 'display';
+  display.tabIndex = 0; // focusable
   container.appendChild(display);
 
-  const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;';
-  display.appendChild(chevron);
+  // chevron at end (display content rendered later)
+  const chevron = document.createElement('div');
+  chevron.style.marginLeft = 'auto';
+  chevron.style.opacity = '0.6';
+  chevron.innerHTML = '&#9662;';
+  // chevron appended in renderMultiselectDisplay
 
-  const panel = document.createElement('div'); panel.className='multiselect-panel hidden';
+  // panel
+  const panel = document.createElement('div');
+  panel.className = 'multiselect-panel hidden';
   container.appendChild(panel);
 
-  const actions = document.createElement('div'); actions.className='panel-actions';
+  // panel header with actions
+  const actions = document.createElement('div');
+  actions.className = 'panel-actions';
   const selectAllBtn = document.createElement('button'); selectAllBtn.type='button'; selectAllBtn.textContent='Выбрать всё';
   const clearBtn = document.createElement('button'); clearBtn.type='button'; clearBtn.textContent='Очистить';
   actions.appendChild(selectAllBtn); actions.appendChild(clearBtn);
   panel.appendChild(actions);
 
-  const list = document.createElement('div'); list.className='options'; panel.appendChild(list);
+  const list = document.createElement('div');
+  list.className = 'options';
+  panel.appendChild(list);
 
+  // populate options
   refreshMultiselectOptions(containerId);
 
-  // toggle panel on click of display (not entire container) — avoids accidental closure ordering
-  display.addEventListener('click', (e) => {
+  // actions
+  selectAllBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    // close other panels
-    document.querySelectorAll('.multiselect-panel').forEach(p => { if (p !== panel) p.classList.add('hidden'); });
-    panel.classList.toggle('hidden');
+    Array.from(list.querySelectorAll('input[type=checkbox]')).forEach(i => i.checked = true);
+    onMultiselectChange(containerId);
+  });
+  clearBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    Array.from(list.querySelectorAll('input[type=checkbox]')).forEach(i => i.checked = false);
+    onMultiselectChange(containerId);
   });
 
-  // keyboard support: Enter/Space toggles
+  // keyboard support
   display.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); display.click(); }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleMultiselectPanel(container);
+    }
   });
-
-  // panel actions
-  selectAllBtn.addEventListener('click', (e) => { e.stopPropagation(); const inputs = list.querySelectorAll('input[type=checkbox]'); inputs.forEach(i => i.checked = true); onMultiselectChange(containerId); });
-  clearBtn.addEventListener('click', (e) => { e.stopPropagation(); const inputs = list.querySelectorAll('input[type=checkbox]'); inputs.forEach(i => i.checked = false); onMultiselectChange(containerId); });
 }
 
-/* refresh options for multiselect from data (allowedValues optional) */
+/* refresh options for multiselect from current dataset (allowedValues optional) */
 function refreshMultiselectOptions(containerId, allowedValues=null){
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -180,33 +250,68 @@ function refreshMultiselectOptions(containerId, allowedValues=null){
   const header = container.dataset.csvHeader;
   let values = [];
   if (allowedValues) values = Array.from(new Set(allowedValues)).filter(Boolean);
-  else if (header) values = Array.from(new Set(rawRows.map(r=>r[header]).filter(Boolean)));
+  else if (header) values = Array.from(new Set(rawRows.map(r => r[header]).filter(Boolean)));
   values.sort((a,b)=>a.localeCompare(b,'ru'));
   values.forEach(v => {
-    const row = document.createElement('div'); row.className='opt';
+    const row = document.createElement('div');
+    row.className = 'opt';
     const id = containerId + '___' + Math.abs(hashString(v));
-    const input = document.createElement('input'); input.type='checkbox'; input.id = id; input.value = v;
-    const label = document.createElement('label'); label.htmlFor = id; label.textContent = v;
-    input.addEventListener('change', (e) => { e.stopPropagation(); onMultiselectChange(containerId); });
-    row.appendChild(input); row.appendChild(label);
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = id;
+    input.value = v;
+    const label = document.createElement('label');
+    label.htmlFor = id;
+    label.textContent = v;
+    input.addEventListener('change', (ev) => {
+      ev.stopPropagation();
+      onMultiselectChange(containerId);
+    });
+    row.appendChild(input);
+    row.appendChild(label);
     list.appendChild(row);
   });
   renderMultiselectDisplay(containerId);
 }
+
 function hashString(s){ let h=0; for (let i=0;i<s.length;i++) h=((h<<5)-h)+s.charCodeAt(i); return (h>>>0).toString(36); }
-function getMultiselectValues(id){ const container = document.getElementById(id); if (!container) return []; return Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value); }
-function setMultiselectValues(id, values){ const container = document.getElementById(id); if (!container) return; const inputs = Array.from(container.querySelectorAll('input[type=checkbox]')); inputs.forEach(i => i.checked = values.includes(i.value)); renderMultiselectDisplay(id); }
-function renderMultiselectDisplay(id){
-  const container = document.getElementById(id); if (!container) return;
-  const display = container.querySelector('.display'); display.innerHTML='';
-  const vals = getMultiselectValues(id);
-  if (!vals.length){ const ph = document.createElement('div'); ph.className='placeholder'; ph.textContent = container.dataset.placeholder || 'Все'; display.appendChild(ph); }
-  else if (vals.length <= 3){ vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); }); }
-  else { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip); }
-  const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;'; display.appendChild(chevron);
+
+function getMultiselectValues(id){
+  const container = document.getElementById(id);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type=checkbox]:checked')).map(i=>i.value);
 }
 
-/* multiselect interaction */
+function setMultiselectValues(id, values){
+  const container = document.getElementById(id);
+  if (!container) return;
+  const inputs = Array.from(container.querySelectorAll('input[type=checkbox]'));
+  inputs.forEach(i => i.checked = values.includes(i.value));
+  renderMultiselectDisplay(id);
+}
+
+function renderMultiselectDisplay(id){
+  const container = document.getElementById(id);
+  if (!container) return;
+  const display = container.querySelector('.display');
+  display.innerHTML = '';
+  const vals = getMultiselectValues(id);
+  if (!vals.length){
+    const ph = document.createElement('div');
+    ph.className = 'placeholder';
+    ph.textContent = container.dataset.placeholder || 'Все';
+    display.appendChild(ph);
+  } else if (vals.length <= 3){
+    vals.forEach(v => { const chip = document.createElement('div'); chip.className='chip'; chip.textContent = v; display.appendChild(chip); });
+  } else {
+    const chip = document.createElement('div'); chip.className='chip'; chip.textContent = `${vals.length} выбрано`; display.appendChild(chip);
+  }
+  // chevron
+  const chevron = document.createElement('div'); chevron.style.marginLeft='auto'; chevron.style.opacity='0.6'; chevron.innerHTML='&#9662;';
+  display.appendChild(chevron);
+}
+
+/* on change */
 function onMultiselectChange(containerId){
   renderMultiselectDisplay(containerId);
   saveFiltersToStorage();
@@ -214,7 +319,7 @@ function onMultiselectChange(containerId){
   renderTable();
 }
 
-/* cascade: for each filter compute allowed values based on other active filters */
+/* cascade filters */
 function cascadeFilters(){
   FILTER_CONFIG.forEach(cfg => {
     const containerId = cfg.id;
@@ -229,7 +334,7 @@ function cascadeFilters(){
         return sel.includes(row[hdr]);
       });
     });
-    const allowed = Array.from(new Set(subset.map(r=>r[header]).filter(Boolean)));
+    const allowed = Array.from(new Set(subset.map(r => r[header]).filter(Boolean)));
     allowed.sort((a,b)=>a.localeCompare(b,'ru'));
     refreshMultiselectOptions(containerId, allowed);
     const saved = loadFiltersFromStorageFor(containerId) || [];
@@ -239,12 +344,27 @@ function cascadeFilters(){
   });
 }
 
-/* storage for filters */
-function saveFiltersToStorage(){ const obj = {}; FILTER_CONFIG.forEach(cfg => obj[cfg.id] = getMultiselectValues(cfg.id)); localStorage.setItem(STORAGE_FILTERS, JSON.stringify(obj)); }
+/* storage */
+function saveFiltersToStorage(){ const obj={}; FILTER_CONFIG.forEach(cfg => obj[cfg.id] = getMultiselectValues(cfg.id)); localStorage.setItem(STORAGE_FILTERS, JSON.stringify(obj)); }
 function loadFiltersFromStorageFor(id){ try { const raw = localStorage.getItem(STORAGE_FILTERS); if (!raw) return []; const obj = JSON.parse(raw); return obj[id] || []; } catch(e){ return []; } }
-function restoreFiltersFromStorage(){ try { const raw = localStorage.getItem(STORAGE_FILTERS); if (!raw) { FILTER_CONFIG.forEach(cfg => refreshMultiselectOptions(cfg.id)); return; } const obj = JSON.parse(raw); FILTER_CONFIG.forEach(cfg => { refreshMultiselectOptions(cfg.id); const saved = obj[cfg.id] || []; setMultiselectValues(cfg.id, saved.filter(Boolean)); }); cascadeFilters(); } catch(e){ console.warn('restore filters error', e); FILTER_CONFIG.forEach(cfg => refreshMultiselectOptions(cfg.id)); } }
+function restoreFiltersFromStorage(){
+  try {
+    const raw = localStorage.getItem(STORAGE_FILTERS);
+    if (!raw) { FILTER_CONFIG.forEach(cfg => refreshMultiselectOptions(cfg.id)); return; }
+    const obj = JSON.parse(raw);
+    FILTER_CONFIG.forEach(cfg => {
+      refreshMultiselectOptions(cfg.id);
+      const saved = obj[cfg.id] || [];
+      setMultiselectValues(cfg.id, saved.filter(Boolean));
+    });
+    cascadeFilters();
+  } catch(e){
+    console.warn('restore filters error', e);
+    FILTER_CONFIG.forEach(cfg => refreshMultiselectOptions(cfg.id));
+  }
+}
 
-/* clear filters */
+/* clear */
 function onClearClick(){
   FILTER_CONFIG.forEach(cfg => { refreshMultiselectOptions(cfg.id); setMultiselectValues(cfg.id, []); });
   localStorage.removeItem(STORAGE_FILTERS);
@@ -252,14 +372,16 @@ function onClearClick(){
   showToast('Фильтры сброшены', 900);
 }
 
-/* --- render table (with sorting) --- */
+/* -------------------- render table (with sort) -------------------- */
 function renderTable(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
-  // build active map: header->values
   const active = {};
-  FILTER_CONFIG.forEach(cfg => { const hdr = document.getElementById(cfg.id).dataset.csvHeader; active[hdr] = getMultiselectValues(cfg.id); });
+  FILTER_CONFIG.forEach(cfg => {
+    const hdr = document.getElementById(cfg.id).dataset.csvHeader;
+    active[hdr] = getMultiselectValues(cfg.id);
+  });
 
   let rows = rawRows.filter(row => {
     return Object.entries(active).every(([hdr, vals]) => {
@@ -269,9 +391,9 @@ function renderTable(){
     });
   });
 
-  // apply sorting if any
+  // sorting
   if (sortState.key) {
-    const mapKey = sortState.key; // 'func'|'product' etc (logical)
+    const mapKey = sortState.key;
     const candidates = LOGICAL_FIELDS[mapKey] || LOGICAL_FIELDS['func'];
     rows.sort((a,b) => {
       const va = (getFieldValue(a, candidates)||'').toString().toLowerCase();
@@ -286,7 +408,7 @@ function renderTable(){
 
   if (!rows.length){
     tbody.innerHTML = `<tr><td colspan="7" style="padding:18px 12px; color:#666">Нет данных по выбранным фильтрам</td></tr>`;
-    attachRoleTooltips(); // clear tooltips
+    attachRoleTooltips(); // reset tooltips
     return;
   }
 
@@ -314,13 +436,13 @@ function renderTable(){
   attachRoleTooltips();
 }
 
-/* helper get value by candidate list */
+/* helper */
 function getFieldValue(row, candidates){
   for (let k of candidates) if (row[k] !== undefined) return row[k];
   return '';
 }
 
-/* attach floating tooltip handlers to .role elements */
+/* -------------------- role tooltip (floating, not affecting layout) -------------------- */
 function attachRoleTooltips(){
   const tip = document.getElementById('floating-tooltip');
   if (!tip) return;
@@ -329,11 +451,10 @@ function attachRoleTooltips(){
   const tbody = document.querySelector('#matrix tbody');
   if (!tbody) return;
 
-  // remove previous delegated listeners by cloning (simple reset)
+  // replace tbody node to remove old listeners safely
   const newTbody = tbody.cloneNode(true);
   tbody.parentNode.replaceChild(newTbody, tbody);
 
-  // delegate mouseenter/mouseleave on new tbody
   newTbody.addEventListener('mouseover', (e) => {
     const el = e.target.closest('.role');
     if (!el) return;
@@ -361,36 +482,30 @@ function positionTooltipNearElement(tip, el){
   const rect = el.getBoundingClientRect();
   tip.style.maxWidth = Math.min(420, window.innerWidth - 40) + 'px';
   const margin = 8;
-  const tipW = tip.offsetWidth || Math.min(420, window.innerWidth - 40);
-  // compute top
+  // compute top (vertical centering)
   let top = rect.top + rect.height/2 - tip.offsetHeight/2;
   if (top < 8) top = 8;
   if (top + tip.offsetHeight > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - tip.offsetHeight);
-  // try place to the right
+  const tipW = tip.offsetWidth || Math.min(420, window.innerWidth - 40);
   const rightX = rect.right + margin;
   const leftX = rect.left - margin - tipW;
-  if (rightX + tipW < window.innerWidth - 8) {
-    tip.style.left = rightX + 'px';
-  } else if (leftX > 8) {
-    tip.style.left = leftX + 'px';
-  } else {
-    tip.style.left = Math.max(8, Math.min(window.innerWidth - tipW - 8, rect.right + margin)) + 'px';
-  }
+  if (rightX + tipW < window.innerWidth - 8) tip.style.left = rightX + 'px';
+  else if (leftX > 8) tip.style.left = leftX + 'px';
+  else tip.style.left = Math.max(8, Math.min(window.innerWidth - tipW - 8, rect.right + margin)) + 'px';
   tip.style.top = top + 'px';
 }
 
-/* sorting visuals */
+/* -------------------- sorting visuals -------------------- */
 function updateSortIndicators(){
   document.querySelectorAll('th.sortable').forEach(th => {
     const arrow = th.querySelector('.sort-arrow');
     if (!arrow) return;
-    if (sortState.key === th.dataset.key){
-      arrow.textContent = sortState.dir === 1 ? '▲' : '▼';
-    } else arrow.textContent = '';
+    if (sortState.key === th.dataset.key) arrow.textContent = sortState.dir === 1 ? '▲' : '▼';
+    else arrow.textContent = '';
   });
 }
 
-/* Export visible rows (7 cols) */
+/* -------------------- export -------------------- */
 function onExportClick(){
   if (!lastRenderedRows || !lastRenderedRows.length){ showToast('Нет данных для экспорта', 1200); return; }
   const headers = ["№","Функция","Продукт","Департамент","Отдел","Должность","Роль"];
@@ -417,3 +532,16 @@ function onExportClick(){
   const now = new Date(); const ts = now.toISOString().replace(/[:\-]/g,'').split('.')[0]; const fn = `functional-matrix-${ts}.xlsx`; XLSX.writeFile(wb, fn);
   showToast('Экспорт завершён: ' + fn, 1500);
 }
+
+/* -------------------- small UI helpers -------------------- */
+function showInfo(msg, important=false){
+  const el = document.getElementById('info');
+  if (!el) return;
+  el.classList.remove('hidden');
+  el.textContent = msg;
+  el.style.border = important ? '1px solid #ffdede' : 'none';
+}
+function hideInfo(){ const el = document.getElementById('info'); if (!el) return; el.classList.add('hidden'); el.textContent=''; el.style.border='none'; }
+function showToast(msg, ms=1200){ const t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.remove('hidden'); clearTimeout(t._to); t._to = setTimeout(()=> t.classList.add('hidden'), ms); }
+function escapeHtml(s){ if (s==null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function escapeHtmlAttr(s){ return escapeHtml(s).replace(/"/g,'&quot;'); }

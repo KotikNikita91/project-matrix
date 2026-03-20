@@ -4,7 +4,7 @@ const STORAGE_KEY_FILTERS = 'matrix_filters_v3';
 const STORAGE_KEY_SETTINGS = 'matrix_gsheets_settings';
 
 // ВАЖНО: Замените на ваш ID таблицы!
-const DEFAULT_SHEET_ID = ''; // Оставьте пустым для модального окна или вставьте ID
+const DEFAULT_SHEET_ID = '1KAAS2yR0hvptF5nwr5UOpLElclUd5ja-HXdl3Yjp4HM'; // Оставьте пустым для модального окна или вставьте ID
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции. Назначает исполнителей, контролирует сроки и качество.',

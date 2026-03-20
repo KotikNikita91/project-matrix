@@ -48,13 +48,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Проверяем настройки при загрузке
-  const settings = loadSettings();
-  if (settings && settings.sheetId) {
-    loadDataFromGoogleSheets(settings);
-  } else {
-    openSettings();
-  }
+// Автоматическая настройка (ЗАМЕНИТЕ ID НА СВОЙ!)
+const defaultSettings = {
+  sheetId: '1KAAS2yR0hvptF5nwr5UOpLElclUd5ja-HXdl3Yjp4HM',  // 
+  matrixRange: 'Матрица',
+  legendRange: 'Легенда с уровнями'
+};
+const settings = loadSettings() || defaultSettings;
+if (!loadSettings()) {
+  localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(defaultSettings));
+}
+loadDataFromGoogleSheets(settings);
 });
 
 /* ==================== GOOGLE SHEETS ==================== */

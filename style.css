@@ -118,7 +118,7 @@ th.role-header:hover{ background:#ebe6ff; }
 .col-num{ width:50px; min-width:50px; max-width:70px; } /* Узкий столбец для номеров */
 .col-func{ width:30%; min-width:200px; } /* Функция - большой столбец */
 .col-product{ width:25%; min-width:150px; } /* Продукт */
-.col-role{ width:120px; min-width:100px; max-width:150px; } /* Роли - фиксированная ширина */
+.col-role{ width:42%; min-width:100px; } /* Роли - фиксированная ширина */
 
 /* role cells */
 td.col-role-cell{ 

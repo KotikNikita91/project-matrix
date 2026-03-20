@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Функциональная матрица</title>
+
+  <!-- Библиотеки -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Модальное окно настроек Google Sheets -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content">
+      <h2>Настройки Google Sheets</h2>
+      <p class="modal-desc">Укажите ID вашей таблицы Google Sheets и диапазоны данных</p>
+      
+      <div class="form-group">
+        <label for="sheet-id">ID таблицы Google Sheets:</label>
+        <input type="text" id="sheet-id" placeholder="1ABC...xyz" />
+        <small>Найдите ID в URL: https://docs.google.com/spreadsheets/d/<strong>ID_ТАБЛИЦЫ</strong>/edit</small>
+      </div>
+
+      <div class="form-group">
+        <label for="matrix-range">Лист "Матрица" (название):</label>
+        <input type="text" id="matrix-range" value="Матрица" />
+      </div>
+
+      <div class="form-group">
+        <label for="legend-range">Лист "Легенда" (название):</label>
+        <input type="text" id="legend-range" value="Легенда с уровнями" />
+      </div>
+
+      <div class="form-actions">
+        <button id="save-settings" class="btn-primary">Сохранить и загрузить</button>
+        <button id="cancel-settings" class="btn-light">Отмена</button>
+      </div>
+
+      <div class="modal-note">
+        <strong>Важно:</strong> Таблица должна быть доступна по ссылке (настройки доступа: "Все, у кого есть ссылка")
+      </div>
+    </div>
+  </div>
+
+  <header class="compact-header">
+    <div class="header-left">
+      <div class="title-compact">
+        <h1>Функциональная матрица</h1>
+        <p class="subtitle-compact">Интерактивный просмотр ролей</p>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="controls-compact" id="controls-compact">
+        <!-- Фильтры будут добавлены динамически -->
+        <div class="filter-compact" data-filter-id="filter-function"></div>
+        <div class="filter-compact" data-filter-id="filter-department"></div>
+        <div class="filter-compact" data-filter-id="filter-division"></div>
+        <div class="filter-compact" data-filter-id="filter-position"></div>
+        <div class="filter-compact" data-filter-id="filter-role"></div>
+      </div>
+
+      <div class="actions-compact">
+        <button id="settings-btn" class="btn-light" title="Настройки">⚙️</button>
+        <button id="clear" class="btn-light">Сбросить</button>
+        <button id="export" class="btn-primary">Экспорт</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-area">
+    <div id="info" class="info hidden"></div>
+
+    <div class="table-wrapper" id="table-wrapper">
+      <table id="matrix" aria-describedby="info">
+        <colgroup>
+          <col class="c1" />
+          <col class="c2" />
+          <col class="c3" />
+          <col class="c4" />
+          <col class="c5" />
+          <col class="c6" />
+          <col class="c7" />
+        </colgroup>
+
+        <thead>
+          <tr>
+            <th data-key="num" class="col-id sortable">№ <span class="sort-arrow"></span></th>
+            <th data-key="func" class="col-function sortable">Функция <span class="sort-arrow"></span></th>
+            <th data-key="product" class="col-text-medium sortable">Продукт <span class="sort-arrow"></span></th>
+            <th data-key="department" class="col-department sortable">Департамент <span class="sort-arrow"></span></th>
+            <th data-key="division" class="col-division sortable">Отдел <span class="sort-arrow"></span></th>
+            <th data-key="position" class="col-position sortable">Должность <span class="sort-arrow"></span></th>
+            <th data-key="role" class="col-role sortable">Роль <span class="sort-arrow"></span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </main>
+
+  <div id="floating-tooltip" class="floating-tooltip hidden" role="tooltip"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

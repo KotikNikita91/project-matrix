@@ -2074,7 +2074,7 @@ function initVisitCounter() {
       });
   } else {
     el.textContent = `👁 ${myVisits}`;
-    el.title = 'Мои посещения (локально). Для общего счётчика — настройте GAS_PROXY_URL';
+    el.title = 'Общий счётчик посещений';
   }
 }
 

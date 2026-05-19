@@ -1834,7 +1834,7 @@ function renderReport() {
 
   if (reportSelectedPositions.size === 0) {
     tableEl.innerHTML = `<tr><td colspan="3" class="report-empty">
-      ☝️ Откройте дропдауны выше и выберите должности — они станут столбцами
+      ☝️ выберите должности, чтобы сформировать таблицу
     </td></tr>`;
     return;
   }

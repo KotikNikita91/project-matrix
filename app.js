@@ -10,7 +10,7 @@ const DEFAULT_SHEET_ID = '1KAAS2yR0hvptF5nwr5UOpLElclUd5ja-HXdl3Yjp4HM';
  * Оставить пустой строкой '' если используется GitHub Pages (прямой доступ работает).
  * Пример: 'https://script.google.com/macros/s/AKfycbxXXXXXXX/exec'
  */
-const GAS_PROXY_URL = '';
+const GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbzmJS_VRnFQPJanUXvs5cAI4QI2Yx3Et8cy49IIqy4cUY2G9dD2dZl8EXlbLFGuM5VoRA/exec';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции.',

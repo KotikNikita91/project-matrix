@@ -10,7 +10,7 @@ const DEFAULT_SHEET_ID = '1KAAS2yR0hvptF5nwr5UOpLElclUd5ja-HXdl3Yjp4HM';
  * Оставить пустой строкой '' если используется GitHub Pages (прямой доступ работает).
  * Пример: 'https://script.google.com/macros/s/AKfycbxXXXXXXX/exec'
  */
-const GAS_PROXY_URL = '';
+const GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbzmJS_VRnFQPJanUXvs5cAI4QI2Yx3Et8cy49IIqy4cUY2G9dD2dZl8EXlbLFGuM5VoRA/exec';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции.',
@@ -1017,7 +1017,7 @@ function updateRelatedFilters(changedFilterId) {
   });
 }
 
-/** Фильтрует опции в панели дропдауна по строке поиска */
+/** Фильтрует опции в панели а по строке поиска */
 function filterPanelOptions(optionsEl, query) {
   const q = query.trim().toLowerCase().replace(/ё/g, 'е');
   const items = optionsEl.querySelectorAll('.opt');
@@ -1566,9 +1566,9 @@ function buildPositionRoleIndex() {
 }
 
 /**
- * Строит иерархию отделов для дропдаунов.
+ * Строит иерархию отделов для ов.
  * Источник истины — posIndex (те же строки, что использует renderReport).
- * Гарантирует: каждая posKey в дропдауне точно совпадёт с ключом в posIndex.
+ * Гарантирует: каждая posKey в е точно совпадёт с ключом в posIndex.
  */
 function buildDeptHierarchy() {
   const top = new Map();
@@ -1639,7 +1639,7 @@ function buildDeptHierarchy() {
   return new Map([...top.entries()].sort((a, b) => a[1].sortKey - b[1].sortKey));
 }
 
-/* ---------- КОНСТРУКТОР UI (дропдауны) ---------- */
+/* ---------- КОНСТРУКТОР UI (ы) ---------- */
 
 let reportDropdowns = [];  // хранит DOM-ссылки для «Выбрать/Снять все»
 
@@ -1657,7 +1657,7 @@ function buildReportConstructor() {
     dept.children.forEach(child => child.positions.forEach(p => allPositions.add(p)));
     if (allPositions.size === 0) return;
 
-    // Создаём дропдаун-контейнер
+    // Создаём -контейнер
     const wrap = document.createElement('div');
     wrap.className = 'rdrop-wrap';
 
@@ -1900,7 +1900,7 @@ function buildReportBlockFilter() {
       reportSelectedPositions.clear();
       blockPositions.forEach(p => reportSelectedPositions.add(p));
 
-      // Обновляем чекбоксы в дропдаунах
+      // Обновляем чекбоксы в ах
       document.querySelectorAll('.rdrop-opt input[type=checkbox]').forEach(cb => {
         cb.checked = reportSelectedPositions.has(cb.dataset.pos);
       });
@@ -1932,7 +1932,7 @@ function renderReport() {
 
   if (reportSelectedPositions.size === 0) {
     tableEl.innerHTML = `<tr><td colspan="3" class="report-empty">
-      ☝️ Откройте дропдауны выше и выберите должности — они станут столбцами
+      ☝️ выберите должности, чтобы построить таблицу
     </td></tr>`;
     return;
   }

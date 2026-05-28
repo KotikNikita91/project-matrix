@@ -2175,16 +2175,16 @@ function initVisitCounter() {
       .then(r => r.json())
       .then(d => {
         if (d && d.total !== undefined) {
-          el.textContent = `👁 ${d.total.toLocaleString('ru')}`;
+          el.textContent = `🖥👀 ${d.total.toLocaleString('ru')}`;
           el.title = `Всего посещений: ${d.total} | Уникальных: ${d.unique}`;
         }
       })
       .catch(() => {
-        el.textContent = `👁 ${localTotal}`;
+        el.textContent = `🖥👀 ${localTotal}`;
         el.title = 'Локальный счётчик (нет связи с GAS)';
       });
   } else {
-    el.textContent = `👁 ${localTotal}`;
+    el.textContent = `🖥👀 ${localTotal}`;
     el.title = 'Мои посещения (локально). Для общего счётчика — настройте GAS_PROXY_URL';
   }
 }

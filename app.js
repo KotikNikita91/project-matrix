@@ -19,7 +19,7 @@ const GAS_PROXY_URL = '';
  * счётчик покажет локальное значение, а таблица загрузится как обычно.
  * Пример: 'https://script.google.com/macros/s/AKfycbxXXXXXXX/exec'
  */
-const GAS_COUNTER_URL = '';
+const GAS_COUNTER_URL = 'https://script.google.com/macros/s/AKfycbzmJS_VRnFQPJanUXvs5cAI4QI2Yx3Et8cy49IIqy4cUY2G9dD2dZl8EXlbLFGuM5VoRA/exec';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции.',

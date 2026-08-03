@@ -6,11 +6,20 @@ const STORAGE_KEY_SETTINGS = 'matrix_gsheets_settings';
 const DEFAULT_SHEET_ID = '1KAAS2yR0hvptF5nwr5UOpLElclUd5ja-HXdl3Yjp4HM';
 
 /**
- * GAS-прокси URL — заполнить после деплоя Proxy_GAS.gs как Web App.
- * Оставить пустой строкой '' если используется GitHub Pages (прямой доступ работает).
+ * GAS-прокси для ЗАГРУЗКИ ДАННЫХ.
+ * Нужен ТОЛЬКО если сайт размещён НЕ на GitHub Pages (gitverse, gitflic и т.д.) —
+ * Google блокирует прямые запросы с незнакомых доменов.
+ * На github.io — оставить пустым '' (прямой доступ быстрее и надёжнее).
+ */
+const GAS_PROXY_URL = '';
+
+/**
+ * GAS-скрипт для СЧЁТЧИКА ПОСЕЩЕНИЙ — сюда вставить URL веб-приложения.
+ * Работает независимо от загрузки данных: если недоступен или медленный,
+ * счётчик покажет локальное значение, а таблица загрузится как обычно.
  * Пример: 'https://script.google.com/macros/s/AKfycbxXXXXXXX/exec'
  */
-const GAS_PROXY_URL = 'https://script.google.com/macros/s/AKfycbzmJS_VRnFQPJanUXvs5cAI4QI2Yx3Et8cy49IIqy4cUY2G9dD2dZl8EXlbLFGuM5VoRA/exec';
+const GAS_COUNTER_URL = '';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции.',
@@ -191,16 +200,6 @@ async function loadDataFromGoogleSheets(settings) {
     const parseResult = parseMatrix(matrixData, legendMap);
     rawRows = parseResult.rows;
     roleColumns = parseResult.roles;
-    // Задаём фиксированный порядок столбцов ролей
-    const ROLE_ORDER = ['О', 'ВО', 'В', 'П', 'К', 'ПК', 'И', 'У', 'УО'];
-    roleColumns.sort((a, b) => {
-      const ia = ROLE_ORDER.indexOf(a);
-      const ib = ROLE_ORDER.indexOf(b);
-      if (ia === -1 && ib === -1) return a.localeCompare(b, 'ru');
-      if (ia === -1) return 1;
-      if (ib === -1) return -1;
-      return ia - ib;
-    });
 
     buildTable();
     buildDetailsOptions();
@@ -221,19 +220,19 @@ async function loadDataFromGoogleSheets(settings) {
  *   3. Если прямой не прошёл — пробует публичные CORS-прокси
  */
 async function fetchSheet(sheetId, sheetName) {
-  // === Режим 1: GAS-прокси ===
+  // === Режим 1: GAS-прокси (если задан) ===
   if (GAS_PROXY_URL) {
     const url = `${GAS_PROXY_URL}?sheet=${encodeURIComponent(sheetName)}`;
     try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      // 25 сек — GAS может «просыпаться» после простоя (холодный старт)
+      const resp = await fetch(url, { signal: AbortSignal.timeout(25000) });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const json = await resp.json();
       if (json.error) throw new Error('GAS error: ' + json.error);
-      // Конвертируем плоский массив значений в формат gviz для parseMatrix/parseLegend
       return convertGasToGviz(json.values);
     } catch (err) {
-      throw new Error('GAS-прокси недоступен: ' + err.message +
-        '. Проверьте GAS_PROXY_URL и настройки деплоя (Execute as: Me, Access: Anyone).');
+      // Не падаем — пробуем прямой запрос ниже
+      console.warn('⚠️ GAS-прокси не ответил, пробуем напрямую:', err.message);
     }
   }
 
@@ -778,8 +777,9 @@ function getAvailableFilterValues(field) {
       roleColumns.forEach(role => {
         const cellValue = row.roles[role];
         if (!cellValue) return;
-        // Делим и по " | " (новый GAS-формат) и по ", " (старый)
-        const parts = cellValue.split(/\s*\|\s*|,\s*/).map(p => p.trim()).filter(Boolean);
+        // Делим ТОЛЬКО по " | " — в названиях должностей встречаются запятые
+        // (например: "Ведущий бухгалтер (СЗ Крылья, Светлый, Космо)")
+        const parts = cellValue.split(/\s*\|\s*/).map(p => p.trim()).filter(Boolean);
         parts.forEach(part => {
           const match = part.match(/^(.+?)\s*\/\s*(.+)$/);
           if (match) {
@@ -840,52 +840,16 @@ function applyFilters(row, filters) {
     if (!filters.func.includes(row.func)) return false;
   }
   if (filters.department && filters.department.length > 0) {
-    // Извлекаем ВСЕ коды из всех сегментов всех ролей, а не только firstCode.
-    // Иначе "ПО / Инженер | СБ / Специалист" матчит только ПО, СБ теряется.
-    const allCodes = [];
-    roleColumns.forEach(role => {
-      const cellValue = row.roles[role];
-      if (!cellValue) return;
-      cellValue.split(/\s*\|\s*/).forEach(seg => {
-        seg = seg.trim();
-        // Формат А: числовой код "1.2.3 / Должность"
-        const numMatch = seg.match(/^([\d.]+)\s*\//);
-        if (numMatch) {
-          allCodes.push(numMatch[1].trim().replace(/\.+$/, ''));
-          return;
-        }
-        // Формат Б: "КОД / Должность" — ищем по short-имени в легенде
-        const txtMatch = seg.match(/^([^\s/]+)\s*\//);
-        if (txtMatch) {
-          const short = txtMatch[1].trim();
-          const entry = Object.values(legendMap).find(l => l.short === short);
-          if (entry) allCodes.push(entry.code);
-          else allCodes.push(short);
-        }
-      });
-    });
-    const hasMatch = allCodes.some(code =>
+    const rowCodes = Object.values(row.roleCodes).filter(Boolean);
+    const hasMatch = rowCodes.some(code =>
       filters.department.some(fc => code === fc || code.startsWith(fc + '.'))
     );
     if (!hasMatch) return false;
   }
-  if (filters.position && filters.position.length > 0 && filters.role && filters.role.length > 0) {
-    // Оба фильтра активны одновременно — проверяем связку: должность должна находиться
-    // именно в одной из выбранных ролей, а не в любой.
-    const hasCombo = filters.role.some(role => {
-      const cellVal = row.roles[role] || '';
-      return filters.position.some(pos => {
-        // Должность встречается в ячейке как "... / Должность"
-        return cellVal.split(/\s*\|\s*/).some(seg => {
-          const m = seg.match(/\/\s*(.+)$/);
-          return m && m[1].trim() === pos;
-        });
-      });
-    });
-    if (!hasCombo) return false;
-  } else if (filters.position && filters.position.length > 0) {
+  if (filters.position && filters.position.length > 0) {
     if (!row.positions.some(pos => filters.position.includes(pos))) return false;
-  } else if (filters.role && filters.role.length > 0) {
+  }
+  if (filters.role && filters.role.length > 0) {
     if (!filters.role.some(role => row.roles[role])) return false;
   }
   return true;
@@ -1532,39 +1496,18 @@ function normPos(s) {
   return s.trim().replace(/\s+/g, ' ').toLowerCase().replace(/ё/g, 'е');
 }
 
-/**
- * Приводит сегмент к каноническому виду: "SHORT / Должность".
- * Числовые коды ("9.1 / Специалист...") → разрешаются через legendMap → "СБ / Специалист..."
- * Это гарантирует, что одна и та же должность всегда имеет один ключ,
- * независимо от того, как она была закодирована в исходных данных.
- */
-function canonicalizeSeg(seg) {
-  if (!seg) return seg;
-  const numMatch = seg.match(/^([\d.]+)\s*\/\s*(.+)$/);
-  if (!numMatch) return seg;
-  const code = numMatch[1].trim().replace(/\.+$/, '');
-  const position = numMatch[2].trim();
-  // Ищем запись в легенде: сначала точный код, потом топ-уровневый (первая цифра)
-  const entry = legendMap[code] ||
-                legendMap[code.split('.')[0]];
-  if (entry) return `${entry.short} / ${position}`;
-  return seg; // легенда не найдена — оставляем как есть
-}
-
 function buildPositionRoleIndex() {
   const index = new Map();
   rawRows.forEach((row, ri) => {
-    // Два слоя: normKey → role (для поиска), и normKey → оригинальная строка (для дисплея)
+    // Два слоя: normKey → role (для поиска), и normKey → originalSeg (для дисплея)
     const rowMap = new Map();    // normKey → role
     const origMap = new Map();   // normKey → оригинальная строка
     roleColumns.forEach(role => {
       const value = row.roles[role] || '';
       if (!value) return;
-      value.split(' | ').forEach(rawSeg => {
-        rawSeg = rawSeg.trim();
-        if (!rawSeg) return;
-        // Канонизируем: "9.1 / Специалист" → "СБ / Специалист"
-        const seg = canonicalizeSeg(rawSeg);
+      value.split(' | ').forEach(seg => {
+        seg = seg.trim();
+        if (!seg) return;
         const nk = normPos(seg);
         rowMap.set(nk, role);
         if (!origMap.has(nk)) origMap.set(nk, seg);
@@ -2002,7 +1945,7 @@ function renderReport() {
     const rowMap = entry ? entry.rowMap : new Map();  // normKey → role
 
     // Проверяем совпадение по нормализованному ключу
-    if (!selPos.some(p => rowMap.has(normPos(canonicalizeSeg(p))))) return;
+    if (!selPos.some(p => rowMap.has(normPos(p)))) return;
 
     const tr = document.createElement('tr');
     const fixedData = [
@@ -2020,7 +1963,7 @@ function renderReport() {
     selPos.forEach(pos => {
       const td = document.createElement('td');
       td.className = 'rtd-role';
-      const role = rowMap.get(normPos(canonicalizeSeg(pos))) || '';  // ищем по канонизированному ключу
+      const role = rowMap.get(normPos(pos)) || '';  // ищем по нормализованному ключу
       if (role) {
         const roleCssKey = role.replace(/[^А-ЯЁA-Z]/g, '') || 'default';
         const bg = ROLE_COLORS[role] || '#757575';
@@ -2179,9 +2122,12 @@ function initVisitCounter() {
   const localTotal = parseInt(localStorage.getItem('matrix_my_visits') || '0') + 1;
   localStorage.setItem('matrix_my_visits', localTotal);
 
-  if (GAS_PROXY_URL) {
-    const url = `${GAS_PROXY_URL}?action=counter&uid=${encodeURIComponent(clientId)}`;
-    fetch(url)
+  const counterUrl = GAS_COUNTER_URL || GAS_PROXY_URL;
+
+  if (counterUrl) {
+    const url = `${counterUrl}?action=counter&uid=${encodeURIComponent(clientId)}`;
+    // Счётчик не критичен — таймаут короткий, ошибки молча игнорируем
+    fetch(url, { signal: AbortSignal.timeout(20000) })
       .then(r => r.json())
       .then(d => {
         if (d && d.total !== undefined) {
@@ -2190,12 +2136,13 @@ function initVisitCounter() {
         }
       })
       .catch(() => {
+        // Тихо откатываемся на локальный счётчик, без ошибок на экране
         el.textContent = `🙈 ${localTotal}`;
-        el.title = 'Локальный счётчик (нет связи с GAS)';
+        el.title = 'Локальный счётчик';
       });
   } else {
     el.textContent = `🙈 ${localTotal}`;
-    el.title = 'Мои посещения (локально). Для общего счётчика — настройте GAS_PROXY_URL';
+    el.title = 'Мои посещения (локально). Для общего счётчика — настройте GAS_COUNTER_URL';
   }
 }
 

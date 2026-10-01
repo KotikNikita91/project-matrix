@@ -19,7 +19,7 @@ const GAS_PROXY_URL = '';
  * счётчик покажет локальное значение, а таблица загрузится как обычно.
  * Пример: 'https://script.google.com/macros/s/AKfycbxXXXXXXX/exec'
  */
-const GAS_COUNTER_URL = 'https://script.google.com/macros/s/AKfycbzmJS_VRnFQPJanUXvs5cAI4QI2Yx3Et8cy49IIqy4cUY2G9dD2dZl8EXlbLFGuM5VoRA/exec';
+const GAS_COUNTER_URL = '';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции.',
@@ -454,6 +454,63 @@ function getColorFromSegment(segment) {
   return '';
 }
 
+/* ==================== СЕГМЕНТЫ «ПОДРАЗДЕЛЕНИЕ / ДОЛЖНОСТЬ» ==================== */
+
+let _shortIdx = null;
+let _shortIdxSrc = null;
+
+/** short-имя из легенды → код подразделения (кэш, пересобирается при смене legendMap) */
+function getShortToCode() {
+  if (_shortIdx && _shortIdxSrc === legendMap) return _shortIdx;
+  _shortIdx = {};
+  Object.values(legendMap).forEach(l => {
+    if (!(l.short in _shortIdx)) _shortIdx[l.short] = l.code;
+  });
+  _shortIdxSrc = legendMap;
+  return _shortIdx;
+}
+
+/** "ОБКЗ / Руководитель отдела" → { text, code, position } */
+function parseSegment(text) {
+  const m = String(text).match(/^(.+?)\s*\/\s*(.+)$/);
+  if (!m) return { text, code: '', position: '' };
+  const head = m[1].trim();
+  const position = m[2].trim();
+  let code = '';
+  if (/^[\d.]+$/.test(head)) code = head.replace(/\.+$/, '');
+  else code = getShortToCode()[head] || '';
+  return { text, code, position };
+}
+
+/** Все сегменты строки по всем ролям (кэшируется на строке) */
+function getRowSegments(row) {
+  if (row._segs) return row._segs;
+  const segs = [];
+  roleColumns.forEach(role => {
+    const value = row.roles[role] || '';
+    if (!value) return;
+    value.split(/\s*\|\s*/).forEach(s => {
+      s = s.trim();
+      if (s) segs.push(parseSegment(s));
+    });
+  });
+  row._segs = segs;
+  return segs;
+}
+
+/**
+ * Сегмент подходит, если ОДНОВРЕМЕННО выполнены выбранные условия:
+ * должность — точное совпадение, подразделение — тот же код или вложенный.
+ */
+function segmentMatches(seg, depts, poss) {
+  if (poss && poss.length > 0 && !poss.includes(seg.position)) return false;
+  if (depts && depts.length > 0) {
+    if (!seg.code) return false;
+    if (!depts.some(fc => seg.code === fc || seg.code.startsWith(fc + '.'))) return false;
+  }
+  return true;
+}
+
 /* ==================== УМНЫЙ ПОИСК ==================== */
 
 /**
@@ -839,15 +896,15 @@ function applyFilters(row, filters) {
   if (filters.func && filters.func.length > 0) {
     if (!filters.func.includes(row.func)) return false;
   }
-  if (filters.department && filters.department.length > 0) {
-    const rowCodes = Object.values(row.roleCodes).filter(Boolean);
-    const hasMatch = rowCodes.some(code =>
-      filters.department.some(fc => code === fc || code.startsWith(fc + '.'))
+  // Подразделение и должность проверяются у одного и того же сегмента:
+  // строка проходит, только если есть участник, подходящий под оба отбора сразу
+  const hasDept = filters.department && filters.department.length > 0;
+  const hasPos  = filters.position && filters.position.length > 0;
+  if (hasDept || hasPos) {
+    const hit = getRowSegments(row).some(seg =>
+      segmentMatches(seg, filters.department, filters.position)
     );
-    if (!hasMatch) return false;
-  }
-  if (filters.position && filters.position.length > 0) {
-    if (!row.positions.some(pos => filters.position.includes(pos))) return false;
+    if (!hit) return false;
   }
   if (filters.role && filters.role.length > 0) {
     if (!filters.role.some(role => row.roles[role])) return false;
@@ -1174,24 +1231,26 @@ function renderTable() {
 
     roleColumns.forEach(role => {
       const value = row.roles[role] || '';
-      const isHighlighted = selectedPositions.length > 0 && selectedPositions.some(pos => value.includes(`/ ${pos}`));
-      const highlightClass = isHighlighted ? 'highlighted-position' : '';
-
       let displayHtml = '';
       if (value) {
         const segments = value.split(' | ');
         displayHtml = segments.map((v, i) => {
           v = v.trim();
           if (!v) return '';
-          // Извлекаем цвет для каждого сегмента отдельно по его коду
+          // Цвет — по коду подразделения конкретной должности
           const segColor = getColorFromSegment(v);
           const bgAttr = segColor ? ` style="background:${segColor}"` : '';
+          // Подсвечиваем только ту должность, что подходит под отбор
+          // (выбранная должность + выбранное подразделение, если оно задано)
+          const hit = selectedPositions.length > 0 &&
+            segmentMatches(parseSegment(v), filters.department, filters.position);
+          const hitClass = hit ? ' seg-hit' : '';
           const sep = i > 0 ? '<span class="pos-sep">·</span>' : '';
-          return `${sep}<span class="pos-entry"><span class="pos-bg"${bgAttr}>${escapeHtml(v)}</span></span>`;
+          return `${sep}<span class="pos-entry"><span class="pos-bg${hitClass}"${bgAttr}>${escapeHtml(v)}</span></span>`;
         }).join('');
       }
 
-      html += `<td class="col-role-cell ${highlightClass}">${displayHtml}</td>`;
+      html += `<td class="col-role-cell">${displayHtml}</td>`;
     });
 
     html += `</tr>`;

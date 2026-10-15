@@ -2179,7 +2179,7 @@ function initVisitCounter() {
   const LAST_KEY = 'matrix_last_server_counter';
 
   const showServer = (total, unique, stale) => {
-    el.textContent = `👁 ${Number(total).toLocaleString('ru')}`;
+    el.textContent = `🙈 ${Number(total).toLocaleString('ru')}`;
     el.title = `Всего посещений: ${total}` +
       (unique !== undefined && unique !== null ? ` | Уникальных: ${unique}` : '') +
       (stale ? ' (последнее полученное значение — сервер не ответил)' : '');

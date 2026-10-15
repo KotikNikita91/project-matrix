@@ -6,20 +6,13 @@ const STORAGE_KEY_SETTINGS = 'matrix_gsheets_settings';
 const DEFAULT_SHEET_ID = '1KAAS2yR0hvptF5nwr5UOpLElclUd5ja-HXdl3Yjp4HM';
 
 /**
- * GAS-прокси для ЗАГРУЗКИ ДАННЫХ.
- * Нужен ТОЛЬКО если сайт размещён НЕ на GitHub Pages (gitverse, gitflic и т.д.) —
- * Google блокирует прямые запросы с незнакомых доменов.
- * На github.io — оставить пустым '' (прямой доступ быстрее и надёжнее).
+ * Настройки берутся из config.js (его не нужно менять при обновлении app.js).
+ *  GAS_PROXY_URL   — загрузка данных через GAS; нужна только вне GitHub Pages.
+ *  GAS_COUNTER_URL — URL веб-приложения GAS для счётчика посещений.
  */
-const GAS_PROXY_URL = '';
-
-/**
- * GAS-скрипт для СЧЁТЧИКА ПОСЕЩЕНИЙ — сюда вставить URL веб-приложения.
- * Работает независимо от загрузки данных: если недоступен или медленный,
- * счётчик покажет локальное значение, а таблица загрузится как обычно.
- * Пример: 'https://script.google.com/macros/s/AKfycbxXXXXXXX/exec'
- */
-const GAS_COUNTER_URL = '';
+const _CFG = window.MATRIX_CONFIG || {};
+const GAS_PROXY_URL = _CFG.GAS_PROXY_URL || '';
+const GAS_COUNTER_URL = _CFG.GAS_COUNTER_URL || '';
 
 const ROLE_INFO = {
   'О': 'Ответственный: организует и координирует выполнение функции.',
@@ -272,7 +265,7 @@ async function fetchSheet(sheetId, sheetName) {
 
   throw new Error(
     'Не удалось загрузить данные. ' +
-    'Если сайт размещён не на GitHub Pages — задайте GAS_PROXY_URL в app.js. ' +
+    'Если сайт размещён не на GitHub Pages — задайте GAS_PROXY_URL в config.js. ' +
     'Инструкция: см. Proxy_GAS.gs в архиве проекта.'
   );
 }
@@ -491,7 +484,7 @@ function getRowSegments(row) {
     if (!value) return;
     value.split(/\s*\|\s*/).forEach(s => {
       s = s.trim();
-      if (s) segs.push(parseSegment(s));
+      if (s) segs.push({ ...parseSegment(s), role });
     });
   });
   row._segs = segs;
@@ -500,9 +493,12 @@ function getRowSegments(row) {
 
 /**
  * Сегмент подходит, если ОДНОВРЕМЕННО выполнены выбранные условия:
- * должность — точное совпадение, подразделение — тот же код или вложенный.
+ * роль — колонка сегмента, должность — точное совпадение,
+ * подразделение — тот же код или вложенный.
  */
-function segmentMatches(seg, depts, poss) {
+function segmentMatches(seg, depts, poss, roles) {
+  // роль — колонка, в которой стоит этот участник
+  if (roles && roles.length > 0 && !roles.includes(seg.role)) return false;
   if (poss && poss.length > 0 && !poss.includes(seg.position)) return false;
   if (depts && depts.length > 0) {
     if (!seg.code) return false;
@@ -900,14 +896,12 @@ function applyFilters(row, filters) {
   // строка проходит, только если есть участник, подходящий под оба отбора сразу
   const hasDept = filters.department && filters.department.length > 0;
   const hasPos  = filters.position && filters.position.length > 0;
-  if (hasDept || hasPos) {
+  const hasRole = filters.role && filters.role.length > 0;
+  if (hasDept || hasPos || hasRole) {
     const hit = getRowSegments(row).some(seg =>
-      segmentMatches(seg, filters.department, filters.position)
+      segmentMatches(seg, filters.department, filters.position, filters.role)
     );
     if (!hit) return false;
-  }
-  if (filters.role && filters.role.length > 0) {
-    if (!filters.role.some(role => row.roles[role])) return false;
   }
   return true;
 }
@@ -1243,7 +1237,7 @@ function renderTable() {
           // Подсвечиваем только ту должность, что подходит под отбор
           // (выбранная должность + выбранное подразделение, если оно задано)
           const hit = selectedPositions.length > 0 &&
-            segmentMatches(parseSegment(v), filters.department, filters.position);
+            segmentMatches({ ...parseSegment(v), role }, filters.department, filters.position, filters.role);
           const hitClass = hit ? ' seg-hit' : '';
           const sep = i > 0 ? '<span class="pos-sep">·</span>' : '';
           return `${sep}<span class="pos-entry"><span class="pos-bg${hitClass}"${bgAttr}>${escapeHtml(v)}</span></span>`;
@@ -2182,26 +2176,44 @@ function initVisitCounter() {
   localStorage.setItem('matrix_my_visits', localTotal);
 
   const counterUrl = GAS_COUNTER_URL || GAS_PROXY_URL;
+  const LAST_KEY = 'matrix_last_server_counter';
+
+  const showServer = (total, unique, stale) => {
+    el.textContent = `👁 ${Number(total).toLocaleString('ru')}`;
+    el.title = `Всего посещений: ${total}` +
+      (unique !== undefined && unique !== null ? ` | Уникальных: ${unique}` : '') +
+      (stale ? ' (последнее полученное значение — сервер не ответил)' : '');
+  };
 
   if (counterUrl) {
+    // Пока ждём ответ — показываем последнее известное значение с сервера
+    try {
+      const last = JSON.parse(localStorage.getItem(LAST_KEY) || 'null');
+      if (last && last.total !== undefined) showServer(last.total, last.unique, true);
+    } catch (e) {}
+
     const url = `${counterUrl}?action=counter&uid=${encodeURIComponent(clientId)}`;
-    // Счётчик не критичен — таймаут короткий, ошибки молча игнорируем
-    fetch(url, { signal: AbortSignal.timeout(20000) })
+    // GAS после простоя просыпается долго — даём запас по времени
+    fetch(url, { signal: AbortSignal.timeout(30000) })
       .then(r => r.json())
       .then(d => {
         if (d && d.total !== undefined) {
-          el.textContent = `🙈 ${d.total.toLocaleString('ru')}`;
-          el.title = `Всего посещений: ${d.total} | Уникальных: ${d.unique}`;
+          showServer(d.total, d.unique, false);
+          try { localStorage.setItem(LAST_KEY, JSON.stringify({ total: d.total, unique: d.unique })); } catch (e) {}
+        } else {
+          throw new Error(d && d.error ? d.error : 'bad response');
         }
       })
-      .catch(() => {
-        // Тихо откатываемся на локальный счётчик, без ошибок на экране
-        el.textContent = `🙈 ${localTotal}`;
-        el.title = 'Локальный счётчик';
+      .catch(err => {
+        console.warn('Счётчик: сервер не ответил —', err && err.message);
+        if (!el.title || el.textContent === '🙈 —') {
+          el.textContent = `🙈 ${localTotal}`;
+          el.title = 'Локальный счётчик этого браузера — GAS не ответил';
+        }
       });
   } else {
     el.textContent = `🙈 ${localTotal}`;
-    el.title = 'Мои посещения (локально). Для общего счётчика — настройте GAS_COUNTER_URL';
+    el.title = 'Локальный счётчик этого браузера: GAS_COUNTER_URL не задан в config.js';
   }
 }
 

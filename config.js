@@ -9,5 +9,5 @@ window.MATRIX_CONFIG = {
 
   // Счётчик посещений: сюда URL веб-приложения Google Apps Script
   // вида 'https://script.google.com/macros/s/XXXX/exec'
-  GAS_COUNTER_URL: ''
+  GAS_COUNTER_URL: 'https://script.google.com/macros/s/AKfycbzmJS_VRnFQPJanUXvs5cAI4QI2Yx3Et8cy49IIqy4cUY2G9dD2dZl8EXlbLFGuM5VoRA/exec'
 };
